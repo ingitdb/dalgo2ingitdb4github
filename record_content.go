@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 func resolveRecordPath(colDef *ingitdb.CollectionDef, recordKey string) string {

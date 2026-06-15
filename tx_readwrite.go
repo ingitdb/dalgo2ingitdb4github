@@ -9,7 +9,7 @@ import (
 	"github.com/dal-go/dalgo/update"
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 	"gopkg.in/yaml.v3"
 )
 

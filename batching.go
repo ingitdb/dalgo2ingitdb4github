@@ -7,7 +7,7 @@ import (
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/dalgo/update"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // BatchingGitHubDB wraps a githubDB so that RunReadwriteTransaction buffers

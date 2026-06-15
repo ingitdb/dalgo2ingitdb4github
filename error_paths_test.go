@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 func newTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {

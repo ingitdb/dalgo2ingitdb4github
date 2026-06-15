@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // errYAMLMarshaler implements yaml.Marshaler and returns an error, allowing

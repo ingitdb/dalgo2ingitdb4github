@@ -12,7 +12,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // TestBatchingTx_FlushChanges_SingleRecordBuffersAndDeletions verifies the

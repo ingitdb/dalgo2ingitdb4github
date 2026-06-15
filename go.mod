@@ -6,7 +6,7 @@ require (
 	github.com/dal-go/dalgo v0.46.1
 	github.com/google/go-github/v88 v88.0.0
 	github.com/ingitdb/dalgo2ingitdb v0.0.0
-	github.com/ingitdb/ingitdb-go v0.0.0
+	github.com/ingitdb/ingitdb-go/ingitdb v0.0.0
 	github.com/pelletier/go-toml/v2 v2.3.1
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -25,5 +25,5 @@ require (
 
 replace (
 	github.com/ingitdb/dalgo2ingitdb => ../dalgo2ingitdb
-	github.com/ingitdb/ingitdb-go => ../ingitdb-go
+	github.com/ingitdb/ingitdb-go/ingitdb => ../ingitdb-go/ingitdb
 )

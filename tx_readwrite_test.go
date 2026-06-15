@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/ingitdb/ingitdb-go"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 func TestReadwriteTx_ID(t *testing.T) {
