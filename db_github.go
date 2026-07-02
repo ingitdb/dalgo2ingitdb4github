@@ -1,6 +1,8 @@
 // Package dalgo2ghingitdb provides a DALgo database adapter for reading inGitDB repositories from GitHub using the GitHub API.
 // It supports read-only access to public repositories with no authentication required.
-// Future versions will support authentication and write operations for private repositories.
+// Authenticated access is configured either with a static Config.Token or, for
+// rotating credentials such as short-lived GitHub App installation tokens,
+// with a Config.TokenProvider that is consulted on every request.
 package dalgo2ghingitdb
 
 import (
