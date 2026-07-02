@@ -12,10 +12,20 @@ import (
 
 // Config defines connection settings for reading an inGitDB repository from GitHub.
 type Config struct {
-	Owner      string
-	Repo       string
-	Ref        string
-	Token      string
+	Owner string
+	Repo  string
+	Ref   string
+
+	// Token is a static GitHub token (e.g. a classic/fine-grained PAT).
+	// If TokenProvider is nil and Token is non-empty, Token is wrapped in
+	// StaticTokenProvider automatically, preserving legacy behavior.
+	Token string
+
+	// TokenProvider, when set, supplies the token per request and takes
+	// precedence over Token. Use it to inject rotating credentials such as
+	// short-lived GitHub App installation tokens.
+	TokenProvider TokenProvider
+
 	APIBaseURL string
 	HTTPClient *http.Client
 }
@@ -26,6 +36,19 @@ func (c Config) validate() error {
 	}
 	if c.Repo == "" {
 		return errors.New("repo is required")
+	}
+	return nil
+}
+
+// tokenProvider resolves the effective TokenProvider: an explicit
+// Config.TokenProvider wins; otherwise a non-empty Config.Token is wrapped in
+// a StaticTokenProvider; nil means unauthenticated requests.
+func (c Config) tokenProvider() TokenProvider {
+	if c.TokenProvider != nil {
+		return c.TokenProvider
+	}
+	if c.Token != "" {
+		return StaticTokenProvider(c.Token)
 	}
 	return nil
 }
@@ -46,25 +69,9 @@ func NewGitHubFileReader(cfg Config) (FileReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	opts := make([]github.ClientOptionsFunc, 0, 3) // max 3: HTTPClient + Token + APIBaseURL
-	httpClient := cfg.HTTPClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
-	opts = append(opts, github.WithHTTPClient(httpClient))
-	if cfg.Token != "" {
-		opts = append(opts, github.WithAuthToken(cfg.Token))
-	}
-	if cfg.APIBaseURL != "" {
-		baseURL := cfg.APIBaseURL
-		if !strings.HasSuffix(baseURL, "/") {
-			baseURL += "/"
-		}
-		opts = append(opts, github.WithEnterpriseURLs(baseURL, baseURL))
-	}
-	client, err := github.NewClient(opts...)
+	client, err := newGitHubAPIClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create github client: %w", err)
+		return nil, err
 	}
 	return &githubFileReader{cfg: cfg, client: client}, nil
 }

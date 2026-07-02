@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/google/go-github/v88/github"
@@ -35,25 +34,9 @@ func NewTreeWriter(cfg Config) (*TreeWriter, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
-	opts := make([]github.ClientOptionsFunc, 0, 3) // max 3: HTTPClient + Token + APIBaseURL
-	httpClient := cfg.HTTPClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
-	opts = append(opts, github.WithHTTPClient(httpClient))
-	if cfg.Token != "" {
-		opts = append(opts, github.WithAuthToken(cfg.Token))
-	}
-	if cfg.APIBaseURL != "" {
-		baseURL := cfg.APIBaseURL
-		if !strings.HasSuffix(baseURL, "/") {
-			baseURL += "/"
-		}
-		opts = append(opts, github.WithEnterpriseURLs(baseURL, baseURL))
-	}
-	client, err := github.NewClient(opts...)
+	client, err := newGitHubAPIClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create github client: %w", err)
+		return nil, err
 	}
 	return &TreeWriter{cfg: cfg, client: client}, nil
 }
