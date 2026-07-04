@@ -24,13 +24,10 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 	if r.db.def == nil {
 		return fmt.Errorf("definition is required")
 	}
-	key := record.Key()
-	collectionID := key.Collection()
-	colDef, ok := r.db.def.Collections[collectionID]
-	if !ok {
-		return fmt.Errorf("collection %q not found in definition", collectionID)
+	colDef, recordKey, err := r.resolveCollection(record.Key())
+	if err != nil {
+		return err
 	}
-	recordKey := fmt.Sprintf("%v", key.ID)
 	recordPath := resolveRecordPath(colDef, recordKey)
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.SingleRecord:
@@ -122,13 +119,18 @@ func (r readonlyTx) resolveCollection(key *dal.Key) (*ingitdb.CollectionDef, str
 	if r.db.def == nil {
 		return nil, "", fmt.Errorf("definition is required")
 	}
-	collectionID := key.Collection()
-	colDef, ok := r.db.def.Collections[collectionID]
-	if !ok {
-		return nil, "", fmt.Errorf("collection %q not found in definition", collectionID)
+	if key == nil {
+		return nil, "", fmt.Errorf("key is nil")
+	}
+	// resolveScopedCollection walks the key's parent chain so nested records are
+	// physically scoped under their parent record (spaces/family/contacts/...).
+	// For a top-level key (no parent) it is a plain flat lookup, unchanged.
+	colDef, err := resolveScopedCollection(r.db.def, key.Collection(), key.Parent())
+	if err != nil {
+		return nil, "", err
 	}
 	if colDef.RecordFile == nil {
-		return nil, "", fmt.Errorf("collection %q has no record file", collectionID)
+		return nil, "", fmt.Errorf("collection %q has no record file", key.Collection())
 	}
 	recordKey := fmt.Sprintf("%v", key.ID)
 	return colDef, recordKey, nil
