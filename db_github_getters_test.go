@@ -2,7 +2,7 @@ package dalgo2ghingitdb
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
@@ -174,13 +174,11 @@ func TestGitHubDB_Exists(t *testing.T) {
 	}
 	ctx := context.Background()
 	key := dal.NewKeyWithID("test", "test")
+	// The collection "test" is absent from the (empty) definition, so it is
+	// treated as not-found: Exists reports false with no error.
 	exists, err := db.Exists(ctx, key)
-	if err == nil {
-		t.Fatal("Exists() expected error, got nil")
-	}
-	expectedMsg := fmt.Sprintf("exists is not implemented by %s", DatabaseID)
-	if err.Error() != expectedMsg {
-		t.Errorf("Exists() error = %q, want %q", err.Error(), expectedMsg)
+	if err != nil {
+		t.Fatalf("Exists() unexpected error: %v", err)
 	}
 	if exists {
 		t.Error("Exists() = true, want false")
@@ -196,14 +194,16 @@ func TestGitHubDB_GetMulti(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 	ctx := context.Background()
-	records := []dal.Record{}
+	// A record in a collection absent from the definition must be marked
+	// not-found per-record, not fail the whole batch.
+	rec := dal.NewRecordWithData(dal.NewKeyWithID("NonExistingKind", "x"), map[string]any{})
+	records := []dal.Record{rec}
 	err = db.GetMulti(ctx, records)
-	if err == nil {
-		t.Fatal("GetMulti() expected error, got nil")
+	if err != nil {
+		t.Fatalf("GetMulti() unexpected error: %v", err)
 	}
-	expectedMsg := fmt.Sprintf("getmulti is not implemented by %s", DatabaseID)
-	if err.Error() != expectedMsg {
-		t.Errorf("GetMulti() error = %q, want %q", err.Error(), expectedMsg)
+	if rec.Exists() {
+		t.Error("expected record in unknown collection to be marked not-found")
 	}
 }
 
@@ -216,13 +216,13 @@ func TestGitHubDB_ExecuteQueryToRecordsReader(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 	ctx := context.Background()
+	// A nil (non-StructuredQuery) query is rejected as not supported.
 	reader, err := db.ExecuteQueryToRecordsReader(ctx, nil)
 	if err == nil {
 		t.Fatal("ExecuteQueryToRecordsReader() expected error, got nil")
 	}
-	expectedMsg := fmt.Sprintf("query is not implemented by %s", DatabaseID)
-	if err.Error() != expectedMsg {
-		t.Errorf("ExecuteQueryToRecordsReader() error = %q, want %q", err.Error(), expectedMsg)
+	if !errors.Is(err, dal.ErrNotSupported) {
+		t.Errorf("ExecuteQueryToRecordsReader() error = %q, want dal.ErrNotSupported", err.Error())
 	}
 	if reader != nil {
 		t.Error("ExecuteQueryToRecordsReader() reader should be nil")
@@ -242,9 +242,8 @@ func TestGitHubDB_ExecuteQueryToRecordsetReader(t *testing.T) {
 	if err == nil {
 		t.Fatal("ExecuteQueryToRecordsetReader() expected error, got nil")
 	}
-	expectedMsg := fmt.Sprintf("query is not implemented by %s", DatabaseID)
-	if err.Error() != expectedMsg {
-		t.Errorf("ExecuteQueryToRecordsetReader() error = %q, want %q", err.Error(), expectedMsg)
+	if !errors.Is(err, dal.ErrNotSupported) {
+		t.Errorf("ExecuteQueryToRecordsetReader() error = %q, want dal.ErrNotSupported", err.Error())
 	}
 	if reader != nil {
 		t.Error("ExecuteQueryToRecordsetReader() reader should be nil")

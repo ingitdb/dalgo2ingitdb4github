@@ -2,7 +2,7 @@ package dalgo2ghingitdb
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
@@ -41,13 +41,10 @@ func TestReadonlyTx_Exists(t *testing.T) {
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		key := dal.NewKeyWithID("test", "test")
+		// Unknown collection → treated as not-found → Exists reports false, no error.
 		exists, existsErr := tx.Exists(ctx, key)
-		if existsErr == nil {
-			t.Fatal("Exists() expected error, got nil")
-		}
-		expectedMsg := fmt.Sprintf("exists is not implemented by %s", DatabaseID)
-		if existsErr.Error() != expectedMsg {
-			t.Errorf("Exists() error = %q, want %q", existsErr.Error(), expectedMsg)
+		if existsErr != nil {
+			t.Fatalf("Exists() unexpected error: %v", existsErr)
 		}
 		if exists {
 			t.Error("Exists() = true, want false")
@@ -69,14 +66,16 @@ func TestReadonlyTx_GetMulti(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
-		records := []dal.Record{}
+		// A record in a collection absent from the definition must be marked
+		// not-found per-record, not fail the whole batch.
+		rec := dal.NewRecordWithData(dal.NewKeyWithID("NonExistingKind", "x"), map[string]any{})
+		records := []dal.Record{rec}
 		getMultiErr := tx.GetMulti(ctx, records)
-		if getMultiErr == nil {
-			t.Fatal("GetMulti() expected error, got nil")
+		if getMultiErr != nil {
+			t.Fatalf("GetMulti() unexpected error: %v", getMultiErr)
 		}
-		expectedMsg := fmt.Sprintf("getmulti is not implemented by %s", DatabaseID)
-		if getMultiErr.Error() != expectedMsg {
-			t.Errorf("GetMulti() error = %q, want %q", getMultiErr.Error(), expectedMsg)
+		if rec.Exists() {
+			t.Error("expected record in unknown collection to be marked not-found")
 		}
 		return nil
 	})
@@ -95,13 +94,13 @@ func TestReadonlyTx_ExecuteQueryToRecordsReader(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
+		// A nil (non-StructuredQuery) query is rejected as not supported.
 		reader, queryErr := tx.ExecuteQueryToRecordsReader(ctx, nil)
 		if queryErr == nil {
 			t.Fatal("ExecuteQueryToRecordsReader() expected error, got nil")
 		}
-		expectedMsg := fmt.Sprintf("query is not implemented by %s", DatabaseID)
-		if queryErr.Error() != expectedMsg {
-			t.Errorf("ExecuteQueryToRecordsReader() error = %q, want %q", queryErr.Error(), expectedMsg)
+		if !errors.Is(queryErr, dal.ErrNotSupported) {
+			t.Errorf("ExecuteQueryToRecordsReader() error = %q, want dal.ErrNotSupported", queryErr.Error())
 		}
 		if reader != nil {
 			t.Error("ExecuteQueryToRecordsReader() reader should be nil")
@@ -127,9 +126,8 @@ func TestReadonlyTx_ExecuteQueryToRecordsetReader(t *testing.T) {
 		if queryErr == nil {
 			t.Fatal("ExecuteQueryToRecordsetReader() expected error, got nil")
 		}
-		expectedMsg := fmt.Sprintf("query is not implemented by %s", DatabaseID)
-		if queryErr.Error() != expectedMsg {
-			t.Errorf("ExecuteQueryToRecordsetReader() error = %q, want %q", queryErr.Error(), expectedMsg)
+		if !errors.Is(queryErr, dal.ErrNotSupported) {
+			t.Errorf("ExecuteQueryToRecordsetReader() error = %q, want dal.ErrNotSupported", queryErr.Error())
 		}
 		if reader != nil {
 			t.Error("ExecuteQueryToRecordsetReader() reader should be nil")
@@ -181,13 +179,15 @@ func TestReadonlyTx_Get_CollectionNotFound(t *testing.T) {
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		key := dal.NewKeyWithID("nonexistent", "test")
 		record := dal.NewRecordWithData(key, map[string]any{})
+		// A record in a collection absent from the definition is treated as
+		// not-found (not a hard error), per the dalgo Getter contract: Get returns
+		// nil and marks the record not-found so GetMulti can continue.
 		getErr := tx.Get(ctx, record)
-		if getErr == nil {
-			t.Fatal("Get() expected error for missing collection, got nil")
+		if getErr != nil {
+			t.Fatalf("Get() unexpected error: %v", getErr)
 		}
-		expectedMsg := `collection "nonexistent" not found in definition`
-		if getErr.Error() != expectedMsg {
-			t.Errorf("Get() error = %q, want %q", getErr.Error(), expectedMsg)
+		if record.Exists() {
+			t.Error("expected record in unknown collection to be marked not-found")
 		}
 		return nil
 	})

@@ -102,17 +102,18 @@ func (w *TreeWriter) CommitChanges(ctx context.Context, message string, changes 
 	entries := make([]*github.TreeEntry, 0, len(changes))
 	for _, ch := range changes {
 		path := ch.Path
-		entry := &github.TreeEntry{Path: &path}
+		mode := "100644"
+		typeBlob := "blob"
+		entry := &github.TreeEntry{Path: &path, Mode: &mode, Type: &typeBlob}
 		if ch.Content != nil {
-			mode := "100644"
-			typeBlob := "blob"
 			content := string(ch.Content)
-			entry.Mode = &mode
-			entry.Type = &typeBlob
 			entry.Content = &content
 		}
-		// For deletions only Path is set; GitHub interprets the missing
-		// sha + mode + type as "remove this path from the base tree".
+		// For deletions Content and SHA stay nil: go-github marshals a nil
+		// SHA as an explicit `"sha": null`, which GitHub interprets as
+		// "remove this path from the base tree". Mode and Type are still
+		// required on every tree entry, or CreateTree returns
+		// "Must supply a valid tree.mode".
 		entries = append(entries, entry)
 	}
 

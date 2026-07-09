@@ -77,15 +77,24 @@ func TestNewBatchingGitHubDB_InvalidConfig(t *testing.T) {
 // Shared helpers for batching tests
 // ---------------------------------------------------------------------------
 
-// makeBatchServer returns a test HTTP server that:
-//   - Serves GET /contents/<path> from the fixtures map.
-//   - Accepts POST /git/trees, /git/commits and PATCH /git/refs/* with stub
-//     responses so CommitChanges succeeds.
+// makeBatchServer returns a test HTTP server that services the Git Data API
+// paths BatchingGitHubDB uses, for both writes and consistent (tree-based)
+// reads:
+//   - GET /git/ref/heads/main, GET /git/commits/head-commit-sha resolve the head.
+//   - GET /git/trees/base-tree-sha?recursive=1 lists a blob per fixtures entry;
+//     each blob's SHA is a deterministic "blob-<path>" so the reader can fetch it.
+//   - GET /git/blobs/blob-<path> returns the fixture content, base64-encoded.
+//   - POST /git/trees, /git/commits and PATCH /git/refs/* stub write responses so
+//     CommitChanges succeeds.
+//   - GET /contents/<path> still serves the fixtures map for any Contents-API
+//     callers (non-batching paths that share this helper).
 //
-// It is intentionally not a full Contents API — it only services the Git Data
-// API paths that BatchingGitHubDB.RunReadwriteTransaction uses.
+// The batching DB reads through the Git Data API for read-after-write
+// consistency, so the fixtures map is surfaced as tree blobs, not only as
+// Contents responses.
 func makeBatchServer(t *testing.T, fixtures map[string]string) *httptest.Server {
 	t.Helper()
+	blobSHA := func(repoPath string) string { return "blob-" + repoPath }
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		p := r.URL.Path
@@ -99,6 +108,42 @@ func makeBatchServer(t *testing.T, fixtures map[string]string) *httptest.Server 
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"sha":  "head-commit-sha",
 				"tree": map[string]any{"sha": "base-tree-sha"},
+			})
+		case r.Method == "GET" && strings.Contains(p, "/git/trees/"):
+			// Recursive tree listing: one blob entry per fixture path.
+			entries := make([]map[string]any, 0, len(fixtures))
+			for repoPath := range fixtures {
+				entries = append(entries, map[string]any{
+					"path": repoPath,
+					"mode": "100644",
+					"type": "blob",
+					"sha":  blobSHA(repoPath),
+				})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sha":       "base-tree-sha",
+				"tree":      entries,
+				"truncated": false,
+			})
+		case r.Method == "GET" && strings.Contains(p, "/git/blobs/"):
+			idx := strings.Index(p, "/git/blobs/")
+			sha := p[idx+len("/git/blobs/"):]
+			var content string
+			var found bool
+			for repoPath, c := range fixtures {
+				if blobSHA(repoPath) == sha {
+					content, found = c, true
+					break
+				}
+			}
+			if !found {
+				http.NotFound(w, r)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sha":      sha,
+				"encoding": "base64",
+				"content":  base64.StdEncoding.EncodeToString([]byte(content)),
 			})
 		case r.Method == "POST" && strings.HasSuffix(p, "/git/trees"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"sha": "new-tree-sha"})
@@ -262,13 +307,12 @@ func TestBatchingTx_Update(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
+		// Unknown collection → record cannot exist → not-found (Update is not
+		// idempotent).
 		return tx.Update(ctx, dal.NewKeyWithID("col", "k"), nil)
 	})
-	if err == nil {
-		t.Fatal("Update: expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("Update error = %q, want 'not implemented'", err.Error())
+	if !dal.IsNotFound(err) {
+		t.Fatalf("Update error = %v, want not-found", err)
 	}
 }
 
@@ -283,13 +327,11 @@ func TestBatchingTx_UpdateRecord(t *testing.T) {
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		rec := dal.NewRecordWithData(dal.NewKeyWithID("col", "k"), map[string]any{})
+		// Unknown collection → not-found (UpdateRecord delegates to Update).
 		return tx.UpdateRecord(ctx, rec, nil)
 	})
-	if err == nil {
-		t.Fatal("UpdateRecord: expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("UpdateRecord error = %q, want 'not implemented'", err.Error())
+	if !dal.IsNotFound(err) {
+		t.Fatalf("UpdateRecord error = %v, want not-found", err)
 	}
 }
 
@@ -683,14 +725,14 @@ func TestBatchingTx_Delete_MapOfRecords_NotFound(t *testing.T) {
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, dal.NewKeyWithID("tags", "nonexistent"))
 	})
-	if err != dal.ErrRecordNotFound {
-		t.Fatalf("Delete MapOfRecords not found: expected ErrRecordNotFound, got %v", err)
+	if err != nil {
+		t.Fatalf("Delete MapOfRecords not found must be idempotent (nil), got %v", err)
 	}
 }
 
 func TestBatchingTx_Delete_SingleRecord_NotFound(t *testing.T) {
 	t.Parallel()
-	// No fixture → readFileWithSHA returns not-found → Delete returns ErrRecordNotFound.
+	// No fixture → readFileWithSHA returns not-found → Delete is an idempotent no-op.
 	srv := makeBatchServer(t, nil)
 	defer srv.Close()
 
@@ -705,8 +747,8 @@ func TestBatchingTx_Delete_SingleRecord_NotFound(t *testing.T) {
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, dal.NewKeyWithID("tags", "missing"))
 	})
-	if err != dal.ErrRecordNotFound {
-		t.Fatalf("Delete SingleRecord not found: expected ErrRecordNotFound, got %v", err)
+	if err != nil {
+		t.Fatalf("Delete SingleRecord not found must be idempotent (nil), got %v", err)
 	}
 }
 
@@ -736,8 +778,8 @@ func TestBatchingTx_Delete_SingleRecord_BufferedWrite_Converts(t *testing.T) {
 	}
 }
 
-// TestBatchingTx_Delete_SingleRecord_AlreadyBufferedAsDelete verifies the
-// "already buffered as nil-Content → ErrRecordNotFound" path.
+// TestBatchingTx_Delete_SingleRecord_AlreadyBufferedAsDelete verifies that a
+// second delete of the same key in one transaction is an idempotent no-op.
 func TestBatchingTx_Delete_SingleRecord_AlreadyBufferedAsDelete(t *testing.T) {
 	t.Parallel()
 	fixtures := map[string]string{
@@ -759,11 +801,11 @@ func TestBatchingTx_Delete_SingleRecord_AlreadyBufferedAsDelete(t *testing.T) {
 		if delErr := tx.Delete(ctx, dal.NewKeyWithID("tags", "k")); delErr != nil {
 			return fmt.Errorf("first Delete: %w", delErr)
 		}
-		// Second delete → already buffered as deletion.
+		// Second delete → already buffered as deletion (idempotent no-op).
 		return tx.Delete(ctx, dal.NewKeyWithID("tags", "k"))
 	})
-	if err != dal.ErrRecordNotFound {
-		t.Fatalf("Delete already deleted: expected ErrRecordNotFound, got %v", err)
+	if err != nil {
+		t.Fatalf("Delete already deleted must be idempotent (nil), got %v", err)
 	}
 }
 
@@ -875,8 +917,8 @@ func TestReadwriteTx_Delete_SingleRecord_NotFound(t *testing.T) {
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, dal.NewKeyWithID("tags", "missing"))
 	})
-	if err != dal.ErrRecordNotFound {
-		t.Fatalf("Delete SingleRecord not found: expected ErrRecordNotFound, got %v", err)
+	if err != nil {
+		t.Fatalf("Delete SingleRecord not found must be idempotent (nil), got %v", err)
 	}
 }
 

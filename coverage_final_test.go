@@ -73,17 +73,29 @@ func TestNewBatchingGitHubDB_TreeWriterError(t *testing.T) {
 func TestBatchingGitHubDB_RunRWTx_FlushChangesError(t *testing.T) {
 	t.Parallel()
 
-	// Server returns 404 for GET /contents/... so ensureMapLoaded gets
-	// not-found and initialises an empty working map (no parse needed).
-	// Git Data API endpoints must not be called because flushChanges should
-	// fail before CommitChanges is invoked.
+	// The batching DB reads through the Git Data API: resolve head → tree → blob.
+	// An empty tree makes ensureMapLoaded see the map file as absent and start
+	// from an empty working map. Write endpoints (POST /git/trees etc.) must not
+	// be called because flushChanges should fail before CommitChanges is invoked.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.Method == "GET" && strings.Contains(r.URL.Path, "/contents/") {
-			http.NotFound(w, r)
-			return
+		p := r.URL.Path
+		switch {
+		case r.Method == "GET" && strings.Contains(p, "/git/ref/heads/main"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ref":    "refs/heads/main",
+				"object": map[string]any{"sha": "head-commit-sha", "type": "commit"},
+			})
+		case r.Method == "GET" && strings.Contains(p, "/git/commits/head-commit-sha"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sha":  "head-commit-sha",
+				"tree": map[string]any{"sha": "base-tree-sha"},
+			})
+		case r.Method == "GET" && strings.Contains(p, "/git/trees/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"sha": "base-tree-sha", "tree": []any{}, "truncated": false})
+		default:
+			http.Error(w, "unexpected request: "+r.Method+" "+p, http.StatusInternalServerError)
 		}
-		http.Error(w, "unexpected request: "+r.Method+" "+r.URL.Path, http.StatusInternalServerError)
 	}))
 	defer srv.Close()
 
@@ -250,14 +262,28 @@ func TestBatchingTx_Insert_SingleRecord_ReadError(t *testing.T) {
 // format and the record is not already buffered or found on the remote.
 func TestBatchingTx_Insert_SingleRecord_EncodeError_AfterNotFound(t *testing.T) {
 	t.Parallel()
-	// Server returns 404 for content GETs so "not found" passes the remote check,
-	// then encoding fails because of the unsupported format.
+	// The batching DB reads via the Git Data API: an empty tree makes the remote
+	// existence check see the record as absent (not-found), then encoding fails
+	// because of the unsupported format.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			http.NotFound(w, r)
-			return
+		w.Header().Set("Content-Type", "application/json")
+		p := r.URL.Path
+		switch {
+		case r.Method == "GET" && strings.Contains(p, "/git/ref/heads/main"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ref":    "refs/heads/main",
+				"object": map[string]any{"sha": "head-commit-sha", "type": "commit"},
+			})
+		case r.Method == "GET" && strings.Contains(p, "/git/commits/head-commit-sha"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sha":  "head-commit-sha",
+				"tree": map[string]any{"sha": "base-tree-sha"},
+			})
+		case r.Method == "GET" && strings.Contains(p, "/git/trees/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"sha": "base-tree-sha", "tree": []any{}, "truncated": false})
+		default:
+			http.Error(w, "unexpected", http.StatusInternalServerError)
 		}
-		http.Error(w, "unexpected", http.StatusInternalServerError)
 	}))
 	defer srv.Close()
 
@@ -358,15 +384,15 @@ func TestBatchingTx_Delete_SingleRecord_ReadError(t *testing.T) {
 func TestEnsureMapLoaded_AlreadyLoaded(t *testing.T) {
 	t.Parallel()
 
-	var getContentsCalls int
+	// The batching DB reads via the Git Data API. ensureMapLoaded resolves the
+	// head tree once per map file on first touch; the early-return path must
+	// suppress the second load. Count recursive GetTree calls (the read that
+	// resolves the map file's blob) — it must fire exactly once.
+	var getTreeCalls int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		p := r.URL.Path
 		switch {
-		case r.Method == "GET" && strings.Contains(p, "/contents/"):
-			getContentsCalls++
-			// Return an empty map so ensureMapLoaded succeeds.
-			http.NotFound(w, r)
 		case r.Method == "GET" && strings.Contains(p, "/git/ref/heads/main"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"ref":    "refs/heads/main",
@@ -377,6 +403,10 @@ func TestEnsureMapLoaded_AlreadyLoaded(t *testing.T) {
 				"sha":  "head-sha",
 				"tree": map[string]any{"sha": "tree-sha"},
 			})
+		case r.Method == "GET" && strings.Contains(p, "/git/trees/"):
+			getTreeCalls++
+			// Empty tree → ensureMapLoaded sees the map file absent → empty map.
+			_ = json.NewEncoder(w).Encode(map[string]any{"sha": "tree-sha", "tree": []any{}, "truncated": false})
 		case r.Method == "POST" && strings.HasSuffix(p, "/git/trees"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"sha": "new-tree"})
 		case r.Method == "POST" && strings.HasSuffix(p, "/git/commits"):
@@ -417,8 +447,8 @@ func TestEnsureMapLoaded_AlreadyLoaded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunReadwriteTransaction: %v", err)
 	}
-	if getContentsCalls != 1 {
-		t.Errorf("GET /contents/ called %d times, want 1 (early-return should suppress second load)", getContentsCalls)
+	if getTreeCalls != 1 {
+		t.Errorf("recursive GetTree called %d times, want 1 (early-return should suppress second load)", getTreeCalls)
 	}
 }
 

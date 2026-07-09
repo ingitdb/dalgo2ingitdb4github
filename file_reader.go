@@ -62,6 +62,13 @@ type FileReader interface {
 type githubFileReader struct {
 	cfg    Config
 	client *github.Client
+
+	// consistent, when non-nil, routes record reads (ReadFile / readFileWithSHA)
+	// through the Git Data API (branch head → tree → blob) instead of the
+	// eventually-consistent Contents API. The BatchingGitHubDB sets it so its
+	// tight write-then-read paths observe just-committed blobs. When nil, reads
+	// use Repositories.GetContents (the non-batching githubDB path).
+	consistent *treeReader
 }
 
 func NewGitHubFileReader(cfg Config) (FileReader, error) {
@@ -76,7 +83,28 @@ func NewGitHubFileReader(cfg Config) (FileReader, error) {
 	return &githubFileReader{cfg: cfg, client: client}, nil
 }
 
+// newConsistentGitHubFileReader builds a githubFileReader whose record reads go
+// through the Git Data API for read-after-write consistency (used by the
+// batching DB variant).
+func newConsistentGitHubFileReader(cfg Config) (*githubFileReader, error) {
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+	client, err := newGitHubAPIClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	tr, err := newTreeReader(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &githubFileReader{cfg: cfg, client: client, consistent: tr}, nil
+}
+
 func (r githubFileReader) ReadFile(ctx context.Context, path string) (content []byte, found bool, err error) {
+	if r.consistent != nil {
+		return r.consistent.readFile(ctx, path)
+	}
 	cleanPath := strings.TrimPrefix(path, "/")
 	opts := github.RepositoryContentGetOptions{}
 	if r.cfg.Ref != "" {
@@ -135,6 +163,14 @@ func (r githubFileReader) ListDirectory(ctx context.Context, dirPath string) (en
 }
 
 func (r githubFileReader) readFileWithSHA(ctx context.Context, filePath string) (content []byte, sha string, found bool, err error) {
+	if r.consistent != nil {
+		// Consistent (batching) reads go through the Git Data API. The blob SHA is
+		// not the Contents-API file SHA and is never needed on the batching write
+		// path (buffered writes commit via the tree API), so an empty SHA is
+		// returned deliberately.
+		c, f, e := r.consistent.readFile(ctx, filePath)
+		return c, "", f, e
+	}
 	cleanPath := strings.TrimPrefix(filePath, "/")
 	opts := github.RepositoryContentGetOptions{}
 	if r.cfg.Ref != "" {

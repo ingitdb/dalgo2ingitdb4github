@@ -1,12 +1,21 @@
 package dalgo2ghingitdb
 
 import (
+	"errors"
 	"fmt"
 	"path"
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
+
+// errCollectionNotInDefinition is returned (wrapped) by resolveScopedCollection
+// when the key references a collection (or nested subcollection) absent from the
+// loaded definition. Read paths (Get / GetMulti / queries) treat it as a
+// record-not-found so that getting a record from an unknown collection behaves
+// like getting a missing record, per the dalgo contract, rather than surfacing a
+// hard error. Callers detect it with errors.Is.
+var errCollectionNotInDefinition = errors.New("collection not found in definition")
 
 // resolveScopedCollection resolves the collection definition for a (possibly
 // nested) collection identified by its leaf name and the key of its parent
@@ -46,7 +55,7 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	if parent == nil {
 		colDef, ok := def.Collections[collection]
 		if !ok {
-			return nil, fmt.Errorf("collection %q not found in definition", collection)
+			return nil, fmt.Errorf("%w: collection %q not found in definition", errCollectionNotInDefinition, collection)
 		}
 		return colDef, nil
 	}
@@ -67,7 +76,7 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	rootCol := ancestors[0].col
 	cur, ok := def.Collections[rootCol]
 	if !ok {
-		return nil, fmt.Errorf("collection %q not found in definition", rootCol)
+		return nil, fmt.Errorf("%w: collection %q not found in definition", errCollectionNotInDefinition, rootCol)
 	}
 	dir := cur.DirPath
 	// Walk the intermediate ancestors (root's children, grandchildren, ...).
@@ -76,7 +85,7 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 		subColID := ancestors[i].col
 		sub, ok := cur.SubCollections[subColID]
 		if !ok {
-			return nil, fmt.Errorf("subcollection %q under %q not found in definition", subColID, cur.ID)
+			return nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, subColID, cur.ID)
 		}
 		dir = path.Join(dir, parentID, subColID)
 		cur = sub
@@ -87,7 +96,7 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	parentID := ancestors[len(ancestors)-1].id
 	target, ok := cur.SubCollections[collection]
 	if !ok {
-		return nil, fmt.Errorf("subcollection %q under %q not found in definition", collection, cur.ID)
+		return nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, collection, cur.ID)
 	}
 	dir = path.Join(dir, parentID, collection)
 

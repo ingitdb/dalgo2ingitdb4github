@@ -92,6 +92,8 @@ func (r readwriteTx) Insert(ctx context.Context, record dal.Record, opts ...dal.
 	}
 	recordPath := resolveRecordPath(colDef, recordKey)
 
+	// Delete is idempotent per the dalgo contract: deleting a record that does
+	// not exist is a no-op (returns nil).
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.MapOfRecords:
 		content, sha, found, readErr := r.db.fileReader.readFileWithSHA(ctx, recordPath)
@@ -160,6 +162,8 @@ func (r readwriteTx) Delete(ctx context.Context, key *dal.Key) error {
 	}
 	recordPath := resolveRecordPath(colDef, recordKey)
 
+	// Delete is idempotent per the dalgo contract: deleting a record that does
+	// not exist is a no-op (returns nil).
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.MapOfRecords:
 		content, sha, found, readErr := r.db.fileReader.readFileWithSHA(ctx, recordPath)
@@ -167,14 +171,14 @@ func (r readwriteTx) Delete(ctx context.Context, key *dal.Key) error {
 			return readErr
 		}
 		if !found {
-			return dal.ErrRecordNotFound
+			return nil // idempotent: nothing to delete
 		}
 		allRecords, parseErr := ingitdb.ParseMapOfRecordsContent(content, colDef.RecordFile.Format)
 		if parseErr != nil {
 			return parseErr
 		}
 		if _, exists := allRecords[recordKey]; !exists {
-			return dal.ErrRecordNotFound
+			return nil // idempotent: nothing to delete
 		}
 		delete(allRecords, recordKey)
 		toEncode := make(map[string]any, len(allRecords))
@@ -200,7 +204,7 @@ func (r readwriteTx) Delete(ctx context.Context, key *dal.Key) error {
 			return readErr
 		}
 		if !found {
-			return dal.ErrRecordNotFound
+			return nil // idempotent: nothing to delete
 		}
 		deleteErr := r.db.fileReader.deleteFile(ctx, recordPath, "ingitdb: delete "+colDef.ID+"/"+recordKey, sha)
 		if deleteErr != nil {
@@ -220,14 +224,36 @@ func (r readwriteTx) DeleteMulti(ctx context.Context, keys []*dal.Key) error {
 	return fmt.Errorf("not implemented by %s", DatabaseID)
 }
 
+// Update applies field-level updates by reading the record, mutating it in
+// memory, then writing it back via Set. Updating a non-existent record returns
+// dal.ErrRecordNotFound (Update is not idempotent, unlike Delete). Preconditions
+// are not supported.
 func (r readwriteTx) Update(ctx context.Context, key *dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
-	_, _, _, _ = ctx, key, updates, preconditions
-	return fmt.Errorf("not implemented by %s", DatabaseID)
+	if len(preconditions) > 0 {
+		return fmt.Errorf("%w: Update preconditions are not supported by %s", dal.ErrNotSupported, DatabaseID)
+	}
+	rec := dal.NewRecordWithData(key, map[string]any{})
+	if err := r.Get(ctx, rec); err != nil {
+		return err
+	}
+	// Get reports a missing record via record.SetError(<not-found>) and returns
+	// nil. record.Error() masks not-found (returns nil), so detect absence via
+	// Exists() and surface ErrRecordNotFound (Update is not idempotent).
+	if !rec.Exists() {
+		return dal.ErrRecordNotFound
+	}
+	data, ok := rec.Data().(map[string]any)
+	if !ok {
+		return fmt.Errorf("record data is not map[string]any")
+	}
+	if err := applyUpdates(data, updates); err != nil {
+		return err
+	}
+	return r.Set(ctx, dal.NewRecordWithData(key, data))
 }
 
 func (r readwriteTx) UpdateRecord(ctx context.Context, record dal.Record, updates []update.Update, preconditions ...dal.Precondition) error {
-	_, _, _, _ = ctx, record, updates, preconditions
-	return fmt.Errorf("not implemented by %s", DatabaseID)
+	return r.Update(ctx, record.Key(), updates, preconditions...)
 }
 
 func (r readwriteTx) UpdateMulti(ctx context.Context, keys []*dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {

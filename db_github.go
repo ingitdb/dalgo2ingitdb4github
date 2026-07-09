@@ -86,21 +86,21 @@ func (db *githubDB) Get(ctx context.Context, record dal.Record) error {
 }
 
 func (db *githubDB) Exists(ctx context.Context, key *dal.Key) (bool, error) {
-	_, _ = ctx, key
-	return false, fmt.Errorf("exists is not implemented by %s", DatabaseID)
+	tx := readonlyTx{db: db}
+	return tx.Exists(ctx, key)
 }
 
 func (db *githubDB) GetMulti(ctx context.Context, records []dal.Record) error {
-	_, _ = ctx, records
-	return fmt.Errorf("getmulti is not implemented by %s", DatabaseID)
+	tx := readonlyTx{db: db}
+	return tx.GetMulti(ctx, records)
 }
 
 func (db *githubDB) ExecuteQueryToRecordsReader(ctx context.Context, query dal.Query) (dal.RecordsReader, error) {
-	_, _ = ctx, query
-	return nil, fmt.Errorf("query is not implemented by %s", DatabaseID)
+	tx := readonlyTx{db: db}
+	return tx.ExecuteQueryToRecordsReader(ctx, query)
 }
 
 func (db *githubDB) ExecuteQueryToRecordsetReader(ctx context.Context, query dal.Query, options ...recordset.Option) (dal.RecordsetReader, error) {
-	_, _, _ = ctx, query, options
-	return nil, fmt.Errorf("query is not implemented by %s", DatabaseID)
+	tx := readonlyTx{db: db}
+	return tx.ExecuteQueryToRecordsetReader(ctx, query, options...)
 }

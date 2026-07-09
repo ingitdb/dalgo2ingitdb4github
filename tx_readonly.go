@@ -2,6 +2,7 @@ package dalgo2ghingitdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 
@@ -26,6 +27,13 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 	}
 	colDef, recordKey, err := r.resolveCollection(record.Key())
 	if err != nil {
+		if errors.Is(err, errCollectionNotInDefinition) {
+			// A record in an unknown collection cannot exist: report not-found via
+			// SetError and return nil so GetMulti keeps going, per the dalgo
+			// Getter contract.
+			record.SetError(dal.NewErrNotFoundByKey(record.Key(), nil))
+			return nil
+		}
 		return err
 	}
 	recordPath := resolveRecordPath(colDef, recordKey)
@@ -61,23 +69,34 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 }
 
 func (r readonlyTx) Exists(ctx context.Context, key *dal.Key) (bool, error) {
-	_, _ = ctx, key
-	return false, fmt.Errorf("exists is not implemented by %s", DatabaseID)
+	rec := dal.NewRecordWithData(key, map[string]any{})
+	if err := r.Get(ctx, rec); err != nil {
+		return false, err
+	}
+	// Get reports absence via record.SetError(<not-found>) and returns nil;
+	// record.Exists() reflects that (false for a not-found record).
+	return rec.Exists(), nil
 }
 
+// GetMulti loads each record by calling Get. Per-record not-found is reported
+// via record.SetError (set inside Get), not as a batch-level error — matching
+// the dalgo GetMulti contract. Only genuine errors abort the batch.
 func (r readonlyTx) GetMulti(ctx context.Context, records []dal.Record) error {
-	_, _ = ctx, records
-	return fmt.Errorf("getmulti is not implemented by %s", DatabaseID)
+	for _, rec := range records {
+		if err := r.Get(ctx, rec); err != nil && !dal.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r readonlyTx) ExecuteQueryToRecordsReader(ctx context.Context, query dal.Query) (dal.RecordsReader, error) {
-	_, _ = ctx, query
-	return nil, fmt.Errorf("query is not implemented by %s", DatabaseID)
+	return r.executeQueryToRecordsReader(ctx, query)
 }
 
 func (r readonlyTx) ExecuteQueryToRecordsetReader(ctx context.Context, query dal.Query, options ...recordset.Option) (dal.RecordsetReader, error) {
 	_, _, _ = ctx, query, options
-	return nil, fmt.Errorf("query is not implemented by %s", DatabaseID)
+	return nil, fmt.Errorf("%w: recordset reader", dal.ErrNotSupported)
 }
 
 func (r readonlyTx) readSingleRecord(ctx context.Context, recordPath string, colDef *ingitdb.CollectionDef) (map[string]any, bool, error) {

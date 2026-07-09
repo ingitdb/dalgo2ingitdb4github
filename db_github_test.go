@@ -360,8 +360,8 @@ func TestGitHubDB_DeleteSingleRecord_NotFound(t *testing.T) {
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
 	})
-	if err != dal.ErrRecordNotFound {
-		t.Fatalf("expected ErrRecordNotFound, got %v", err)
+	if err != nil {
+		t.Fatalf("Delete of a missing record must be idempotent (nil), got %v", err)
 	}
 }
 

@@ -955,7 +955,9 @@ func TestDelete_WriteFile_Error_MapOfRecords(t *testing.T) {
 func TestDelete_DeleteFile_Error_SingleRecord(t *testing.T) {
 	t.Parallel()
 	fixtures := []githubFileFixture{{
-		path:    "data/tags/active.yaml",
+		// Record path includes the $records base dir (resolveRecordPath),
+		// so the read finds it and Delete proceeds to the failing deleteFile.
+		path:    "data/tags/$records/active.yaml",
 		content: "title: Active\n",
 	}}
 	server := newReadWriteFailServer(t, fixtures) // GET succeeds, DELETE fails

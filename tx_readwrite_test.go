@@ -93,13 +93,11 @@ func TestReadwriteTx_Update(t *testing.T) {
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		key := dal.NewKeyWithID("test", "test")
+		// The collection is absent from the definition → the record cannot exist →
+		// Update reports not-found (Update is not idempotent).
 		updateErr := tx.Update(ctx, key, nil)
-		if updateErr == nil {
-			t.Fatal("Update() expected error, got nil")
-		}
-		expectedMsg := fmt.Sprintf("not implemented by %s", DatabaseID)
-		if updateErr.Error() != expectedMsg {
-			t.Errorf("Update() error = %q, want %q", updateErr.Error(), expectedMsg)
+		if !dal.IsNotFound(updateErr) {
+			t.Fatalf("Update() error = %v, want not-found", updateErr)
 		}
 		return nil
 	})
@@ -120,13 +118,10 @@ func TestReadwriteTx_UpdateRecord(t *testing.T) {
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		key := dal.NewKeyWithID("test", "test")
 		record := dal.NewRecordWithData(key, map[string]any{})
+		// Unknown collection → not-found (UpdateRecord delegates to Update).
 		updateRecordErr := tx.UpdateRecord(ctx, record, nil)
-		if updateRecordErr == nil {
-			t.Fatal("UpdateRecord() expected error, got nil")
-		}
-		expectedMsg := fmt.Sprintf("not implemented by %s", DatabaseID)
-		if updateRecordErr.Error() != expectedMsg {
-			t.Errorf("UpdateRecord() error = %q, want %q", updateRecordErr.Error(), expectedMsg)
+		if !dal.IsNotFound(updateRecordErr) {
+			t.Fatalf("UpdateRecord() error = %v, want not-found", updateRecordErr)
 		}
 		return nil
 	})
@@ -434,7 +429,7 @@ func TestReadwriteTx_DeleteMapOfRecords_FileNotFound(t *testing.T) {
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
 	})
-	if err != dal.ErrRecordNotFound {
+	if err != nil {
 		t.Fatalf("Delete() expected ErrRecordNotFound, got %v", err)
 	}
 }
@@ -475,7 +470,7 @@ func TestReadwriteTx_DeleteMapOfRecords_RecordNotInMap(t *testing.T) {
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
 	})
-	if err != dal.ErrRecordNotFound {
+	if err != nil {
 		t.Fatalf("Delete() expected ErrRecordNotFound, got %v", err)
 	}
 }

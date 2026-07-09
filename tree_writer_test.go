@@ -175,11 +175,13 @@ func TestTreeWriter_CommitChanges_DeletesAndModifications(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 tree entries, got %d", len(entries))
 	}
-	// Find the deletion entry: only Path is set, no SHA / mode / type.
+	// Find the deletion entry: it carries mode+type (required by GitHub on
+	// every tree entry) but no content and a null SHA; the modification
+	// entry carries content.
 	var del, mod map[string]any
 	for _, e := range entries {
 		m := e.(map[string]any)
-		if _, hasMode := m["mode"]; hasMode {
+		if _, hasContent := m["content"]; hasContent {
 			mod = m
 		} else {
 			del = m
@@ -191,12 +193,20 @@ func TestTreeWriter_CommitChanges_DeletesAndModifications(t *testing.T) {
 	if mod == nil || mod["path"] != ".ingitdb/root-collections.yaml" {
 		t.Errorf("expected modify entry with path .ingitdb/root-collections.yaml, got %+v", mod)
 	}
-	// Modification entry must carry content; deletion must NOT.
+	// Every tree entry needs mode+type or GitHub rejects the tree.
+	if del["mode"] != "100644" || del["type"] != "blob" {
+		t.Errorf("delete entry must carry mode+type, got %+v", del)
+	}
+	// Modification entry must carry content; deletion must NOT, and its SHA
+	// must be explicitly null (the removal signal).
 	if _, hasContent := mod["content"]; !hasContent {
 		t.Errorf("modify entry missing content")
 	}
 	if _, hasContent := del["content"]; hasContent {
 		t.Errorf("delete entry must not carry content, got %+v", del)
+	}
+	if sha, ok := del["sha"]; !ok || sha != nil {
+		t.Errorf("delete entry must carry an explicit null sha, got %+v", del)
 	}
 
 	if len(mock.createdCommits) != 1 {

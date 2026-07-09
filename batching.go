@@ -2,6 +2,7 @@ package dalgo2ghingitdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dal-go/dalgo/dal"
@@ -47,16 +48,25 @@ func newBatchingGitHubDB(cfg Config, def *ingitdb.Definition, commitMessage stri
 	if commitMessage == "" {
 		return nil, fmt.Errorf("commit message is required")
 	}
-	inner, err := NewGitHubDBWithDef(cfg, def)
+	// The batching variant reads through the Git Data API (tree/blob) for
+	// read-after-write consistency: it commits via the tree API and the
+	// conformance suite does tight write-then-read, which the eventually
+	// consistent Contents API cannot satisfy.
+	reader, err := newConsistentGitHubFileReader(cfg)
 	if err != nil {
 		return nil, err
+	}
+	inner := &githubDB{
+		cfg:        cfg,
+		def:        def,
+		fileReader: reader,
 	}
 	writer, err := treeWriterFn(cfg)
 	if err != nil {
 		return nil, err
 	}
 	return &BatchingGitHubDB{
-		githubDB:      inner.(*githubDB),
+		githubDB:      inner,
 		commitMessage: commitMessage,
 		writer:        writer,
 	}, nil
@@ -93,8 +103,17 @@ func (db *BatchingGitHubDB) RunReadwriteTransaction(ctx context.Context, f dal.R
 	if msg := opts.Message(); msg != "" {
 		commitMessage = msg
 	}
-	_, err = db.writer.CommitChanges(ctx, commitMessage, changes)
-	return err
+	newSHA, err := db.writer.CommitChanges(ctx, commitMessage, changes)
+	if err != nil {
+		return err
+	}
+	// Record the new head so subsequent reads resolve the tree from this exact
+	// commit (by SHA, immediately consistent) rather than via the briefly
+	// lagging branch-ref lookup — read-your-writes for the sole writer.
+	if r := db.fileReader.consistent; r != nil && r.head != nil {
+		r.head.set(newSHA)
+	}
+	return nil
 }
 
 // Compile-time check: BatchingGitHubDB satisfies dal.DB. The embedded
@@ -215,20 +234,22 @@ func (t *batchingTx) Delete(ctx context.Context, key *dal.Key) error {
 		return err
 	}
 	recordPath := resolveRecordPath(colDef, recordKey)
+	// Delete is idempotent per the dalgo contract: deleting a record that does
+	// not exist is a no-op (returns nil), never ErrRecordNotFound.
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.MapOfRecords:
 		if loadErr := t.ensureMapLoaded(ctx, recordPath, colDef); loadErr != nil {
 			return loadErr
 		}
 		if _, exists := t.workingMaps[recordPath][recordKey]; !exists {
-			return dal.ErrRecordNotFound
+			return nil // idempotent: nothing to delete
 		}
 		delete(t.workingMaps[recordPath], recordKey)
 		return nil
 	default:
 		if existing, has := t.bufferedFiles[recordPath]; has {
 			if existing.Content == nil {
-				return dal.ErrRecordNotFound // already buffered as deleted
+				return nil // already buffered as deleted — idempotent
 			}
 			// Was buffered as a write earlier; convert to delete.
 			t.bufferedFiles[recordPath] = TreeChange{Path: recordPath, Content: nil}
@@ -239,7 +260,7 @@ func (t *batchingTx) Delete(ctx context.Context, key *dal.Key) error {
 			return readErr
 		}
 		if !found {
-			return dal.ErrRecordNotFound
+			return nil // idempotent: nothing to delete
 		}
 		t.bufferedFiles[recordPath] = TreeChange{Path: recordPath, Content: nil}
 		return nil
@@ -314,14 +335,82 @@ func (t *batchingTx) DeleteMulti(ctx context.Context, keys []*dal.Key) error {
 	return fmt.Errorf("not implemented by %s (batching)", DatabaseID)
 }
 
+// Update applies field-level updates as a buffered read-modify-write. It loads
+// the record's CURRENT data (preferring buffered in-tx content when this key was
+// Set/Updated earlier in the tx, else reading the current file consistently via
+// the Git Data API), applies updates in memory, then buffers the result as a
+// write (exactly like Set). Unlike Delete, Update is NOT idempotent: updating a
+// record that does not exist returns dal.ErrRecordNotFound.
 func (t *batchingTx) Update(ctx context.Context, key *dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
-	_, _, _, _ = ctx, key, updates, preconditions
-	return fmt.Errorf("not implemented by %s (batching)", DatabaseID)
+	if len(preconditions) > 0 {
+		return fmt.Errorf("%w: Update preconditions are not supported by %s (batching)", dal.ErrNotSupported, DatabaseID)
+	}
+	colDef, recordKey, err := t.resolveCollection(key)
+	if err != nil {
+		if errors.Is(err, errCollectionNotInDefinition) {
+			// An unknown collection cannot hold the record → not-found (Update is
+			// not idempotent).
+			return dal.ErrRecordNotFound
+		}
+		return err
+	}
+	recordPath := resolveRecordPath(colDef, recordKey)
+
+	switch colDef.RecordFile.RecordType {
+	case ingitdb.MapOfRecords:
+		if loadErr := t.ensureMapLoaded(ctx, recordPath, colDef); loadErr != nil {
+			return loadErr
+		}
+		existing, exists := t.workingMaps[recordPath][recordKey]
+		if !exists {
+			return dal.ErrRecordNotFound
+		}
+		data := ingitdb.ApplyLocaleToRead(existing, colDef.Columns)
+		if applyErr := applyUpdates(data, updates); applyErr != nil {
+			return applyErr
+		}
+		t.workingMaps[recordPath][recordKey] = ingitdb.ApplyLocaleToWrite(data, colDef.Columns)
+		return nil
+	default:
+		data, found, loadErr := t.loadSingleForUpdate(ctx, recordPath, colDef)
+		if loadErr != nil {
+			return loadErr
+		}
+		if !found {
+			return dal.ErrRecordNotFound
+		}
+		if applyErr := applyUpdates(data, updates); applyErr != nil {
+			return applyErr
+		}
+		encoded, encodeErr := encodeRecordContent(data, colDef.RecordFile.Format)
+		if encodeErr != nil {
+			return encodeErr
+		}
+		t.bufferedFiles[recordPath] = TreeChange{Path: recordPath, Content: encoded}
+		return nil
+	}
+}
+
+// loadSingleForUpdate returns the current data for a SingleRecord key, preferring
+// the in-transaction buffered content (if this key was Set/Updated earlier in
+// the tx) over a fresh consistent repo read. A key buffered as a deletion, or a
+// missing repo file, reports found=false.
+func (t *batchingTx) loadSingleForUpdate(ctx context.Context, recordPath string, colDef *ingitdb.CollectionDef) (map[string]any, bool, error) {
+	if buffered, has := t.bufferedFiles[recordPath]; has {
+		if buffered.Content == nil {
+			return nil, false, nil // buffered as deletion → logically absent
+		}
+		data, parseErr := ingitdb.ParseRecordContentForCollection(buffered.Content, colDef)
+		if parseErr != nil {
+			return nil, false, parseErr
+		}
+		return data, true, nil
+	}
+	return t.readSingleRecord(ctx, recordPath, colDef)
 }
 
 func (t *batchingTx) UpdateRecord(ctx context.Context, record dal.Record, updates []update.Update, preconditions ...dal.Precondition) error {
-	_, _, _, _ = ctx, record, updates, preconditions
-	return fmt.Errorf("not implemented by %s (batching)", DatabaseID)
+	return t.Update(ctx, record.Key(), updates, preconditions...)
 }
 
 func (t *batchingTx) UpdateMulti(ctx context.Context, keys []*dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
