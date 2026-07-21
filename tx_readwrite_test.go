@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -40,7 +41,7 @@ func TestReadwriteTx_SetMulti(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		records := []dal.Record{}
+		records := []dalrecord.Record{}
 		setMultiErr := tx.SetMulti(ctx, records)
 		if setMultiErr == nil {
 			t.Fatal("SetMulti() expected error, got nil")
@@ -66,7 +67,7 @@ func TestReadwriteTx_DeleteMulti(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		keys := []*dal.Key{}
+		keys := []*dalrecord.Key{}
 		deleteMultiErr := tx.DeleteMulti(ctx, keys)
 		if deleteMultiErr == nil {
 			t.Fatal("DeleteMulti() expected error, got nil")
@@ -92,11 +93,11 @@ func TestReadwriteTx_Update(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("test", "test")
+		key := dalrecord.NewKeyWithID("test", "test")
 		// The collection is absent from the definition → the record cannot exist →
 		// Update reports not-found (Update is not idempotent).
 		updateErr := tx.Update(ctx, key, nil)
-		if !dal.IsNotFound(updateErr) {
+		if !dalrecord.IsNotFound(updateErr) {
 			t.Fatalf("Update() error = %v, want not-found", updateErr)
 		}
 		return nil
@@ -116,11 +117,11 @@ func TestReadwriteTx_UpdateRecord(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("test", "test")
-		record := dal.NewRecordWithData(key, map[string]any{})
+		key := dalrecord.NewKeyWithID("test", "test")
+		record := dalrecord.NewRecordWithData(key, map[string]any{})
 		// Unknown collection → not-found (UpdateRecord delegates to Update).
 		updateRecordErr := tx.UpdateRecord(ctx, record, nil)
-		if !dal.IsNotFound(updateRecordErr) {
+		if !dalrecord.IsNotFound(updateRecordErr) {
 			t.Fatalf("UpdateRecord() error = %v, want not-found", updateRecordErr)
 		}
 		return nil
@@ -140,7 +141,7 @@ func TestReadwriteTx_UpdateMulti(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		keys := []*dal.Key{}
+		keys := []*dalrecord.Key{}
 		updateMultiErr := tx.UpdateMulti(ctx, keys, nil)
 		if updateMultiErr == nil {
 			t.Fatal("UpdateMulti() expected error, got nil")
@@ -166,7 +167,7 @@ func TestReadwriteTx_InsertMulti(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		records := []dal.Record{}
+		records := []dalrecord.Record{}
 		insertMultiErr := tx.InsertMulti(ctx, records)
 		if insertMultiErr == nil {
 			t.Fatal("InsertMulti() expected error, got nil")
@@ -213,9 +214,9 @@ func TestReadwriteTx_SetMapOfRecords(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	data := map[string]any{"title": "Updated"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -253,9 +254,9 @@ func TestReadwriteTx_SetMapOfRecords_NewFile(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "new")
+	key := dalrecord.NewKeyWithID("todo.tags", "new")
 	data := map[string]any{"title": "New"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -296,9 +297,9 @@ func TestReadwriteTx_InsertMapOfRecords(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "new")
+	key := dalrecord.NewKeyWithID("todo.tags", "new")
 	data := map[string]any{"title": "New"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -339,9 +340,9 @@ func TestReadwriteTx_InsertMapOfRecords_AlreadyExists(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	data := map[string]any{"title": "Active"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -386,7 +387,7 @@ func TestReadwriteTx_DeleteMapOfRecords(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
@@ -424,7 +425,7 @@ func TestReadwriteTx_DeleteMapOfRecords_FileNotFound(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
@@ -465,7 +466,7 @@ func TestReadwriteTx_DeleteMapOfRecords_RecordNotInMap(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "nonexistent")
+	key := dalrecord.NewKeyWithID("todo.tags", "nonexistent")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)

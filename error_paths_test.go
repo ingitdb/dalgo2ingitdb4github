@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -39,8 +40,8 @@ func TestReadwriteTx_Set_InvalidRecordData(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("test", "test")
-	record := dal.NewRecordWithData(key, "invalid-not-a-map")
+	key := dalrecord.NewKeyWithID("test", "test")
+	record := dalrecord.NewRecordWithData(key, "invalid-not-a-map")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -82,8 +83,8 @@ func TestReadwriteTx_Set_MapOfRecords_InvalidRecordData(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("test", "new")
-	record := dal.NewRecordWithData(key, "invalid-not-a-map")
+	key := dalrecord.NewKeyWithID("test", "new")
+	record := dalrecord.NewRecordWithData(key, "invalid-not-a-map")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -121,8 +122,8 @@ func TestReadwriteTx_Insert_InvalidRecordData(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("test", "test")
-	record := dal.NewRecordWithData(key, "invalid-not-a-map")
+	key := dalrecord.NewKeyWithID("test", "test")
+	record := dalrecord.NewRecordWithData(key, "invalid-not-a-map")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -164,8 +165,8 @@ func TestReadwriteTx_Insert_MapOfRecords_InvalidRecordData(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("test", "new")
-	record := dal.NewRecordWithData(key, "invalid-not-a-map")
+	key := dalrecord.NewKeyWithID("test", "new")
+	record := dalrecord.NewRecordWithData(key, "invalid-not-a-map")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -207,8 +208,8 @@ func TestReadonlyTx_Get_ReadError(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("test", "test")
-	record := dal.NewRecordWithData(key, map[string]any{})
+	key := dalrecord.NewKeyWithID("test", "test")
+	record := dalrecord.NewRecordWithData(key, map[string]any{})
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -246,8 +247,8 @@ func TestReadonlyTx_Get_ParseError_SingleRecord(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("test", "bad")
-	record := dal.NewRecordWithData(key, map[string]any{})
+	key := dalrecord.NewKeyWithID("test", "bad")
+	record := dalrecord.NewRecordWithData(key, map[string]any{})
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -285,8 +286,8 @@ func TestReadonlyTx_Get_ParseError_MapOfRecords(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("test", "key")
-	record := dal.NewRecordWithData(key, map[string]any{})
+	key := dalrecord.NewKeyWithID("test", "key")
+	record := dalrecord.NewRecordWithData(key, map[string]any{})
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -336,9 +337,9 @@ func TestReadwriteTx_InsertMapOfRecords_NewFile(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "new")
+	key := dalrecord.NewKeyWithID("todo.tags", "new")
 	data := map[string]any{"title": "New"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)

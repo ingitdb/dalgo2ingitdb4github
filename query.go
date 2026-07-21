@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/dal-go/dalgo/dal"
+	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -63,7 +64,7 @@ func (r readonlyTx) executeQueryToRecordsReader(ctx context.Context, query dal.Q
 
 	// Build data-backed records first so WHERE / ORDER BY can read fields;
 	// for keys-only queries the data is stripped at the end, after filtering.
-	records := make([]dal.Record, 0, len(rows))
+	records := make([]record.Record, 0, len(rows))
 	for _, row := range rows {
 		records = append(records, buildQueryRecord(colDef.ID, row))
 	}
@@ -83,7 +84,7 @@ func (r readonlyTx) executeQueryToRecordsReader(ctx context.Context, query dal.Q
 
 	if sq.IntoRecord() == nil && sq.IDKind() != reflect.Invalid {
 		for i, rec := range records {
-			keyOnly := dal.NewRecord(rec.Key())
+			keyOnly := record.NewRecord(rec.Key())
 			keyOnly.SetError(nil)
 			records[i] = keyOnly
 		}
@@ -227,15 +228,15 @@ func (r readonlyTx) scanMapOfRecords(ctx context.Context, colDef *ingitdb.Collec
 	return rows, nil
 }
 
-// buildQueryRecord converts a decoded row into a dal.Record shaped for the
+// buildQueryRecord converts a decoded row into a record.Record shaped for the
 // query: keys-only records carry only the key; IntoRecord/default records carry
 // the row's data map. The record's key ID is the derived record key.
-func buildQueryRecord(collection string, row keyedRow) dal.Record {
-	key := dal.NewKeyWithID(collection, row.key)
+func buildQueryRecord(collection string, row keyedRow) record.Record {
+	key := record.NewKeyWithID(collection, row.key)
 	// Always back the record with the decoded map so the shared WHERE /
 	// ORDER BY helpers can read fields. Keys-only queries strip the data
 	// after filtering (a keys-only WHERE still needs the row's fields).
-	rec := dal.NewRecordWithData(key, row.data)
+	rec := record.NewRecordWithData(key, row.data)
 	rec.SetError(nil)
 	return rec
 }
@@ -270,7 +271,7 @@ func buildKeyExtractor(nameTemplate string) (func(relPath string) string, error)
 
 // applyWhere filters records by the query condition, reading fields from the
 // record's data map (and $id from the key).
-func applyWhere(records []dal.Record, cond dal.Condition) ([]dal.Record, error) {
+func applyWhere(records []record.Record, cond dal.Condition) ([]record.Record, error) {
 	filtered := records[:0]
 	for _, rec := range records {
 		data := recordData(rec)
@@ -287,7 +288,7 @@ func applyWhere(records []dal.Record, cond dal.Condition) ([]dal.Record, error) 
 }
 
 // applyOrderBy sorts records in place, stably, honoring asc/desc per field.
-func applyOrderBy(records []dal.Record, orderBy []dal.OrderExpression) {
+func applyOrderBy(records []record.Record, orderBy []dal.OrderExpression) {
 	sort.SliceStable(records, func(i, j int) bool {
 		dataI := recordData(records[i])
 		dataJ := recordData(records[j])
@@ -320,7 +321,7 @@ func applyOrderBy(records []dal.Record, orderBy []dal.OrderExpression) {
 }
 
 // recordData returns the record's data map, or an empty map when absent.
-func recordData(rec dal.Record) map[string]any {
+func recordData(rec record.Record) map[string]any {
 	if data, ok := rec.Data().(map[string]any); ok {
 		return data
 	}

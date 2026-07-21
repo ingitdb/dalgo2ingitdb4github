@@ -10,6 +10,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
+	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -71,7 +72,7 @@ func commitMessageTestDef() *ingitdb.Definition {
 func runOneSetTx(t *testing.T, bdb *BatchingGitHubDB, options ...dal.TransactionOption) {
 	t.Helper()
 	err := bdb.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Set(ctx, dal.NewRecordWithData(dal.NewKeyWithID("cities", "ie"), map[string]any{"region": "eu"}))
+		return tx.Set(ctx, record.NewRecordWithData(record.NewKeyWithID("cities", "ie"), map[string]any{"region": "eu"}))
 	}, options...)
 	if err != nil {
 		t.Fatalf("RunReadwriteTransaction: %v", err)

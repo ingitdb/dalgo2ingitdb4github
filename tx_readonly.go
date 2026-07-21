@@ -8,6 +8,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/dalgo/recordset"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -21,7 +22,7 @@ func (r readonlyTx) Options() dal.TransactionOptions {
 	return nil
 }
 
-func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
+func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 	if r.db.def == nil {
 		return fmt.Errorf("definition is required")
 	}
@@ -44,7 +45,7 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 			return err
 		}
 		if !found {
-			record.SetError(dal.ErrRecordNotFound)
+			record.SetError(dalrecord.ErrRecordNotFound)
 			return nil
 		}
 		record.SetError(nil)
@@ -56,7 +57,7 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 			return err
 		}
 		if !found {
-			record.SetError(dal.ErrRecordNotFound)
+			record.SetError(dalrecord.ErrRecordNotFound)
 			return nil
 		}
 		record.SetError(nil)
@@ -68,8 +69,8 @@ func (r readonlyTx) Get(ctx context.Context, record dal.Record) error {
 	return nil
 }
 
-func (r readonlyTx) Exists(ctx context.Context, key *dal.Key) (bool, error) {
-	rec := dal.NewRecordWithData(key, map[string]any{})
+func (r readonlyTx) Exists(ctx context.Context, key *dalrecord.Key) (bool, error) {
+	rec := dalrecord.NewRecordWithData(key, map[string]any{})
 	if err := r.Get(ctx, rec); err != nil {
 		return false, err
 	}
@@ -81,9 +82,9 @@ func (r readonlyTx) Exists(ctx context.Context, key *dal.Key) (bool, error) {
 // GetMulti loads each record by calling Get. Per-record not-found is reported
 // via record.SetError (set inside Get), not as a batch-level error — matching
 // the dalgo GetMulti contract. Only genuine errors abort the batch.
-func (r readonlyTx) GetMulti(ctx context.Context, records []dal.Record) error {
+func (r readonlyTx) GetMulti(ctx context.Context, records []dalrecord.Record) error {
 	for _, rec := range records {
-		if err := r.Get(ctx, rec); err != nil && !dal.IsNotFound(err) {
+		if err := r.Get(ctx, rec); err != nil && !dalrecord.IsNotFound(err) {
 			return err
 		}
 	}
@@ -134,7 +135,7 @@ func (r readonlyTx) readRecordFromMap(ctx context.Context, recordPath, recordKey
 	return localizedData, true, nil
 }
 
-func (r readonlyTx) resolveCollection(key *dal.Key) (*ingitdb.CollectionDef, string, error) {
+func (r readonlyTx) resolveCollection(key *dalrecord.Key) (*ingitdb.CollectionDef, string, error) {
 	if r.db.def == nil {
 		return nil, "", fmt.Errorf("definition is required")
 	}

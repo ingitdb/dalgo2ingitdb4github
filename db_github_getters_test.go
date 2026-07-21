@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -148,9 +149,9 @@ func TestGitHubDB_Get(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.Get(ctx, record)
 	if err != nil {
@@ -173,7 +174,7 @@ func TestGitHubDB_Exists(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 	ctx := context.Background()
-	key := dal.NewKeyWithID("test", "test")
+	key := dalrecord.NewKeyWithID("test", "test")
 	// The collection "test" is absent from the (empty) definition, so it is
 	// treated as not-found: Exists reports false with no error.
 	exists, err := db.Exists(ctx, key)
@@ -196,8 +197,8 @@ func TestGitHubDB_GetMulti(t *testing.T) {
 	ctx := context.Background()
 	// A record in a collection absent from the definition must be marked
 	// not-found per-record, not fail the whole batch.
-	rec := dal.NewRecordWithData(dal.NewKeyWithID("NonExistingKind", "x"), map[string]any{})
-	records := []dal.Record{rec}
+	rec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("NonExistingKind", "x"), map[string]any{})
+	records := []dalrecord.Record{rec}
 	err = db.GetMulti(ctx, records)
 	if err != nil {
 		t.Fatalf("GetMulti() unexpected error: %v", err)

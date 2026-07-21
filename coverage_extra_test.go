@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -206,8 +207,8 @@ func TestReadRecordFromMap_ReadFileError(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("tags", "active")
-	record := dal.NewRecordWithData(key, map[string]any{})
+	key := dalrecord.NewKeyWithID("tags", "active")
+	record := dalrecord.NewRecordWithData(key, map[string]any{})
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -234,8 +235,8 @@ func TestReadRecordFromMap_FileNotFound(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("tags", "active")
-	record := dal.NewRecordWithData(key, map[string]any{})
+	key := dalrecord.NewKeyWithID("tags", "active")
+	record := dalrecord.NewRecordWithData(key, map[string]any{})
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -263,8 +264,8 @@ func TestResolveCollection_NilDef_ViaSet(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
-		record := dal.NewRecordWithData(key, map[string]any{})
+		key := dalrecord.NewKeyWithID("tags", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -285,8 +286,8 @@ func TestResolveCollection_NilDef_ViaInsert(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
-		record := dal.NewRecordWithData(key, map[string]any{})
+		key := dalrecord.NewKeyWithID("tags", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -312,8 +313,8 @@ func TestResolveCollection_CollectionNotFound_ViaSet(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("unknown", "active")
-		record := dal.NewRecordWithData(key, map[string]any{})
+		key := dalrecord.NewKeyWithID("unknown", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -335,8 +336,8 @@ func TestResolveCollection_CollectionNotFound_ViaInsert(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("unknown", "active")
-		record := dal.NewRecordWithData(key, map[string]any{})
+		key := dalrecord.NewKeyWithID("unknown", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -365,8 +366,8 @@ func TestSet_ReadFileWithSHA_Error_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "Active"})
+		key := dalrecord.NewKeyWithID("tags", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "Active"})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -388,8 +389,8 @@ func TestSet_ReadFileWithSHA_Error_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "Active"})
+		key := dalrecord.NewKeyWithID("tags", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "Active"})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -419,8 +420,8 @@ func TestSet_ParseError_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "New"})
+		key := dalrecord.NewKeyWithID("tags", "new")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "New"})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -450,8 +451,8 @@ func TestSet_WriteFile_Error_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "Updated"})
+		key := dalrecord.NewKeyWithID("tags", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "Updated"})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -477,8 +478,8 @@ func TestSet_WriteFile_Error_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "Updated"})
+		key := dalrecord.NewKeyWithID("tags", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "Updated"})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -522,8 +523,8 @@ func TestSet_EncodeError_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "Active"})
+		key := dalrecord.NewKeyWithID("tags", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "Active"})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -545,9 +546,9 @@ func TestSet_EncodeError_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
+		key := dalrecord.NewKeyWithID("tags", "active")
 		ch := make(chan int)
-		record := dal.NewRecordWithData(key, map[string]any{"ch": ch})
+		record := dalrecord.NewRecordWithData(key, map[string]any{"ch": ch})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -573,8 +574,8 @@ func TestInsert_ReadFileWithSHA_Error_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "New"})
+		key := dalrecord.NewKeyWithID("tags", "new")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "New"})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -596,8 +597,8 @@ func TestInsert_ReadFileWithSHA_Error_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "New"})
+		key := dalrecord.NewKeyWithID("tags", "new")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "New"})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -627,8 +628,8 @@ func TestInsert_ParseError_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "New"})
+		key := dalrecord.NewKeyWithID("tags", "new")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "New"})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -654,8 +655,8 @@ func TestInsert_WriteFile_Error_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "New"})
+		key := dalrecord.NewKeyWithID("tags", "new")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "New"})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -677,8 +678,8 @@ func TestInsert_WriteFile_Error_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "New"})
+		key := dalrecord.NewKeyWithID("tags", "new")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "New"})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -718,8 +719,8 @@ func TestInsert_EncodeError_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "New"})
+		key := dalrecord.NewKeyWithID("tags", "new")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "New"})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -741,9 +742,9 @@ func TestInsert_EncodeError_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
+		key := dalrecord.NewKeyWithID("tags", "new")
 		ch := make(chan int)
-		record := dal.NewRecordWithData(key, map[string]any{"ch": ch})
+		record := dalrecord.NewRecordWithData(key, map[string]any{"ch": ch})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {
@@ -769,7 +770,7 @@ func TestDelete_ReadFileWithSHA_Error_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
+		key := dalrecord.NewKeyWithID("tags", "active")
 		return tx.Delete(ctx, key)
 	})
 	if err == nil {
@@ -791,7 +792,7 @@ func TestDelete_ReadFileWithSHA_Error_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
+		key := dalrecord.NewKeyWithID("tags", "active")
 		return tx.Delete(ctx, key)
 	})
 	if err == nil {
@@ -821,7 +822,7 @@ func TestDelete_ParseError_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
+		key := dalrecord.NewKeyWithID("tags", "active")
 		return tx.Delete(ctx, key)
 	})
 	if err == nil {
@@ -854,7 +855,7 @@ func TestDelete_MapOfRecords_LoopBodyCovered(t *testing.T) {
 	// Delete "active" while "archived" remains → the for-range body executes for "archived".
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
+		key := dalrecord.NewKeyWithID("tags", "active")
 		return tx.Delete(ctx, key)
 	})
 	if err != nil {
@@ -907,7 +908,7 @@ func TestDelete_EncodeError_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
+		key := dalrecord.NewKeyWithID("tags", "active")
 		return tx.Delete(ctx, key)
 	})
 	if err == nil {
@@ -940,7 +941,7 @@ func TestDelete_WriteFile_Error_MapOfRecords(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
+		key := dalrecord.NewKeyWithID("tags", "active")
 		return tx.Delete(ctx, key)
 	})
 	if err == nil {
@@ -972,7 +973,7 @@ func TestDelete_DeleteFile_Error_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
+		key := dalrecord.NewKeyWithID("tags", "active")
 		return tx.Delete(ctx, key)
 	})
 	if err == nil {
@@ -1048,8 +1049,8 @@ func TestSet_EncodeError_UnsupportedFormat_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "active")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "Active"})
+		key := dalrecord.NewKeyWithID("tags", "active")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "Active"})
 		return tx.Set(ctx, record)
 	})
 	if err == nil {
@@ -1084,8 +1085,8 @@ func TestInsert_EncodeError_UnsupportedFormat_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "new")
-		record := dal.NewRecordWithData(key, map[string]any{"title": "New"})
+		key := dalrecord.NewKeyWithID("tags", "new")
+		record := dalrecord.NewRecordWithData(key, map[string]any{"title": "New"})
 		return tx.Insert(ctx, record)
 	})
 	if err == nil {

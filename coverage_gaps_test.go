@@ -26,8 +26,9 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/dal-go/dalgo/update"
+	"github.com/dal-go/record/update"
 
+	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -177,12 +178,12 @@ func makeBatchServer(t *testing.T, fixtures map[string]string) *httptest.Server 
 	}))
 }
 
-// readyRecord creates a dal.Record with SetError(nil) already called so that
+// readyRecord creates a record.Record with SetError(nil) already called so that
 // record.Data() does not panic. batchingTx.Insert/Set access record.Data()
 // before calling SetError internally — unlike readwriteTx which calls SetError
 // first. This is a production-code ordering quirk that tests must work around.
-func readyRecord(key *dal.Key, data map[string]any) dal.Record {
-	rec := dal.NewRecordWithData(key, data)
+func readyRecord(key *record.Key, data map[string]any) record.Record {
+	rec := record.NewRecordWithData(key, data)
 	rec.SetError(nil)
 	return rec
 }
@@ -309,9 +310,9 @@ func TestBatchingTx_Update(t *testing.T) {
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		// Unknown collection → record cannot exist → not-found (Update is not
 		// idempotent).
-		return tx.Update(ctx, dal.NewKeyWithID("col", "k"), nil)
+		return tx.Update(ctx, record.NewKeyWithID("col", "k"), nil)
 	})
-	if !dal.IsNotFound(err) {
+	if !record.IsNotFound(err) {
 		t.Fatalf("Update error = %v, want not-found", err)
 	}
 }
@@ -326,11 +327,11 @@ func TestBatchingTx_UpdateRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := dal.NewRecordWithData(dal.NewKeyWithID("col", "k"), map[string]any{})
+		rec := record.NewRecordWithData(record.NewKeyWithID("col", "k"), map[string]any{})
 		// Unknown collection → not-found (UpdateRecord delegates to Update).
 		return tx.UpdateRecord(ctx, rec, nil)
 	})
-	if !dal.IsNotFound(err) {
+	if !record.IsNotFound(err) {
 		t.Fatalf("UpdateRecord error = %v, want not-found", err)
 	}
 }
@@ -392,7 +393,7 @@ func TestBatchingTx_Set_UnknownCollection(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("unknown", "k"), map[string]any{})
+		rec := readyRecord(record.NewKeyWithID("unknown", "k"), map[string]any{})
 		return tx.Set(ctx, rec)
 	})
 	if err == nil {
@@ -411,7 +412,7 @@ func TestBatchingTx_Set_MapOfRecords_NewFile(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "new"), map[string]any{"title": "New"})
+		rec := readyRecord(record.NewKeyWithID("tags", "new"), map[string]any{"title": "New"})
 		return tx.Set(ctx, rec)
 	})
 	if err != nil {
@@ -432,7 +433,7 @@ func TestBatchingTx_Set_MapOfRecords_ExistingFile(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "active"), map[string]any{"title": "Updated"})
+		rec := readyRecord(record.NewKeyWithID("tags", "active"), map[string]any{"title": "Updated"})
 		return tx.Set(ctx, rec)
 	})
 	if err != nil {
@@ -455,7 +456,7 @@ func TestBatchingTx_Set_MapOfRecords_EnsureLoadError(t *testing.T) {
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"x": 1})
+		rec := readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"x": 1})
 		return tx.Set(ctx, rec)
 	})
 	if err == nil {
@@ -490,7 +491,7 @@ func TestBatchingTx_Set_SingleRecord_EncodeError(t *testing.T) {
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"x": 1})
+		rec := readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"x": 1})
 		return tx.Set(ctx, rec)
 	})
 	if err == nil {
@@ -512,7 +513,7 @@ func TestBatchingTx_Insert_UnknownCollection(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("unknown", "k"), map[string]any{})
+		rec := readyRecord(record.NewKeyWithID("unknown", "k"), map[string]any{})
 		return tx.Insert(ctx, rec)
 	})
 	if err == nil {
@@ -530,7 +531,7 @@ func TestBatchingTx_Insert_MapOfRecords_NewFile(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "new"), map[string]any{"title": "New"})
+		rec := readyRecord(record.NewKeyWithID("tags", "new"), map[string]any{"title": "New"})
 		return tx.Insert(ctx, rec)
 	})
 	if err != nil {
@@ -551,7 +552,7 @@ func TestBatchingTx_Insert_MapOfRecords_AlreadyExists(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "active"), map[string]any{"title": "Active"})
+		rec := readyRecord(record.NewKeyWithID("tags", "active"), map[string]any{"title": "Active"})
 		return tx.Insert(ctx, rec)
 	})
 	if err == nil {
@@ -573,7 +574,7 @@ func TestBatchingTx_Insert_SingleRecord_NewFile(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "new"), map[string]any{"title": "New"})
+		rec := readyRecord(record.NewKeyWithID("tags", "new"), map[string]any{"title": "New"})
 		return tx.Insert(ctx, rec)
 	})
 	if err != nil {
@@ -598,7 +599,7 @@ func TestBatchingTx_Insert_SingleRecord_AlreadyExists(t *testing.T) {
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "active"), map[string]any{"title": "Active"})
+		rec := readyRecord(record.NewKeyWithID("tags", "active"), map[string]any{"title": "Active"})
 		return tx.Insert(ctx, rec)
 	})
 	if err == nil {
@@ -625,11 +626,11 @@ func TestBatchingTx_Insert_SingleRecord_BufferedAsDelete(t *testing.T) {
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		// Delete first (buffers as nil-content deletion).
-		if delErr := tx.Delete(ctx, dal.NewKeyWithID("tags", "active")); delErr != nil {
+		if delErr := tx.Delete(ctx, record.NewKeyWithID("tags", "active")); delErr != nil {
 			return fmt.Errorf("Delete: %w", delErr)
 		}
 		// Now re-insert — should succeed because the record is "logically gone".
-		rec := readyRecord(dal.NewKeyWithID("tags", "active"), map[string]any{"title": "Recreated"})
+		rec := readyRecord(record.NewKeyWithID("tags", "active"), map[string]any{"title": "Recreated"})
 		if insErr := tx.Insert(ctx, rec); insErr != nil {
 			return fmt.Errorf("Insert after delete: %w", insErr)
 		}
@@ -653,12 +654,12 @@ func TestBatchingTx_Insert_SingleRecord_BufferedWrite_AlreadyExists(t *testing.T
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		// First insert succeeds.
-		rec := readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
+		rec := readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
 		if insErr := tx.Insert(ctx, rec); insErr != nil {
 			return fmt.Errorf("first Insert: %w", insErr)
 		}
 		// Second insert on same key → buffered-write collision.
-		rec2 := readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"v": 2})
+		rec2 := readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"v": 2})
 		return tx.Insert(ctx, rec2)
 	})
 	if err == nil {
@@ -683,7 +684,7 @@ func TestBatchingTx_Delete_UnknownCollection(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID("unknown", "k"))
+		return tx.Delete(ctx, record.NewKeyWithID("unknown", "k"))
 	})
 	if err == nil {
 		t.Fatal("Delete unknown collection: expected error, got nil")
@@ -703,7 +704,7 @@ func TestBatchingTx_Delete_MapOfRecords_Found(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "active"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "active"))
 	})
 	if err != nil {
 		t.Fatalf("Delete MapOfRecords found: %v", err)
@@ -723,7 +724,7 @@ func TestBatchingTx_Delete_MapOfRecords_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "nonexistent"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "nonexistent"))
 	})
 	if err != nil {
 		t.Fatalf("Delete MapOfRecords not found must be idempotent (nil), got %v", err)
@@ -745,7 +746,7 @@ func TestBatchingTx_Delete_SingleRecord_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "missing"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "missing"))
 	})
 	if err != nil {
 		t.Fatalf("Delete SingleRecord not found must be idempotent (nil), got %v", err)
@@ -766,12 +767,12 @@ func TestBatchingTx_Delete_SingleRecord_BufferedWrite_Converts(t *testing.T) {
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		// Set buffers the record.
-		rec := readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
+		rec := readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
 		if setErr := tx.Set(ctx, rec); setErr != nil {
 			return fmt.Errorf("Set: %w", setErr)
 		}
 		// Delete converts the buffered write to a deletion.
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "k"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "k"))
 	})
 	if err != nil {
 		t.Fatalf("Delete after Set: %v", err)
@@ -798,11 +799,11 @@ func TestBatchingTx_Delete_SingleRecord_AlreadyBufferedAsDelete(t *testing.T) {
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		// First delete succeeds.
-		if delErr := tx.Delete(ctx, dal.NewKeyWithID("tags", "k")); delErr != nil {
+		if delErr := tx.Delete(ctx, record.NewKeyWithID("tags", "k")); delErr != nil {
 			return fmt.Errorf("first Delete: %w", delErr)
 		}
 		// Second delete → already buffered as deletion (idempotent no-op).
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "k"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "k"))
 	})
 	if err != nil {
 		t.Fatalf("Delete already deleted must be idempotent (nil), got %v", err)
@@ -915,7 +916,7 @@ func TestReadwriteTx_Delete_SingleRecord_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "missing"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "missing"))
 	})
 	if err != nil {
 		t.Fatalf("Delete SingleRecord not found must be idempotent (nil), got %v", err)

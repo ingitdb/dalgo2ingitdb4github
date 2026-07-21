@@ -24,6 +24,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
+	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -124,7 +125,7 @@ func TestBatchingGitHubDB_RunRWTx_FlushChangesError(t *testing.T) {
 		// Set on a MapOfRecords collection: ensureMapLoaded fires (empty map from
 		// 404), then the entry is stored in workingMaps.  The worker returns nil
 		// so flushChanges is called, where EncodeMapOfRecordsContent fails on "xml".
-		rec := readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
+		rec := readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
 		return tx.Set(ctx, rec)
 	})
 	if err == nil {
@@ -151,9 +152,9 @@ func TestBatchingTx_Set_InvalidRecordData(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "k")
+		key := record.NewKeyWithID("tags", "k")
 		// Directly construct a record whose Data() returns a string, not map[string]any.
-		rec := dal.NewRecordWithData(key, "not-a-map")
+		rec := record.NewRecordWithData(key, "not-a-map")
 		rec.SetError(nil) // clear the "no data" sentinel so Data() returns the string
 		return tx.Set(ctx, rec)
 	})
@@ -181,8 +182,8 @@ func TestBatchingTx_Insert_InvalidRecordData(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("tags", "k")
-		rec := dal.NewRecordWithData(key, "not-a-map")
+		key := record.NewKeyWithID("tags", "k")
+		rec := record.NewRecordWithData(key, "not-a-map")
 		rec.SetError(nil)
 		return tx.Insert(ctx, rec)
 	})
@@ -215,7 +216,7 @@ func TestBatchingTx_Insert_MapOfRecords_EnsureLoadError(t *testing.T) {
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "new"), map[string]any{"title": "New"})
+		rec := readyRecord(record.NewKeyWithID("tags", "new"), map[string]any{"title": "New"})
 		return tx.Insert(ctx, rec)
 	})
 	if err == nil {
@@ -245,7 +246,7 @@ func TestBatchingTx_Insert_SingleRecord_ReadError(t *testing.T) {
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
+		rec := readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
 		return tx.Insert(ctx, rec)
 	})
 	if err == nil {
@@ -308,7 +309,7 @@ func TestBatchingTx_Insert_SingleRecord_EncodeError_AfterNotFound(t *testing.T) 
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
+		rec := readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"v": 1})
 		return tx.Insert(ctx, rec)
 	})
 	if err == nil {
@@ -339,7 +340,7 @@ func TestBatchingTx_Delete_MapOfRecords_EnsureLoadError(t *testing.T) {
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "active"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "active"))
 	})
 	if err == nil {
 		t.Fatal("Delete MapOfRecords load error: expected error, got nil")
@@ -367,7 +368,7 @@ func TestBatchingTx_Delete_SingleRecord_ReadError(t *testing.T) {
 
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "k"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "k"))
 	})
 	if err == nil {
 		t.Fatal("Delete SingleRecord API error: expected error, got nil")
@@ -432,13 +433,13 @@ func TestEnsureMapLoaded_AlreadyLoaded(t *testing.T) {
 	ctx := context.Background()
 	err = bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		// First Set: ensureMapLoaded fires the GET /contents/ call.
-		rec1 := readyRecord(dal.NewKeyWithID("tags", "a"), map[string]any{"v": 1})
+		rec1 := readyRecord(record.NewKeyWithID("tags", "a"), map[string]any{"v": 1})
 		if setErr := tx.Set(ctx, rec1); setErr != nil {
 			return fmt.Errorf("first Set: %w", setErr)
 		}
 		// Second Set for a different key in the same map file: ensureMapLoaded
 		// must take the early-return path (map already loaded).
-		rec2 := readyRecord(dal.NewKeyWithID("tags", "b"), map[string]any{"v": 2})
+		rec2 := readyRecord(record.NewKeyWithID("tags", "b"), map[string]any{"v": 2})
 		if setErr := tx.Set(ctx, rec2); setErr != nil {
 			return fmt.Errorf("second Set: %w", setErr)
 		}
@@ -471,7 +472,7 @@ func TestEnsureMapLoaded_ParseError(t *testing.T) {
 
 	ctx := context.Background()
 	err := bdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		rec := readyRecord(dal.NewKeyWithID("tags", "new"), map[string]any{"v": 1})
+		rec := readyRecord(record.NewKeyWithID("tags", "new"), map[string]any{"v": 1})
 		return tx.Set(ctx, rec) // triggers ensureMapLoaded → parseErr
 	})
 	if err == nil {
@@ -592,7 +593,7 @@ func TestReadwriteTx_Delete_SingleRecord_DeleteFileError(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Delete(ctx, dal.NewKeyWithID("tags", "active"))
+		return tx.Delete(ctx, record.NewKeyWithID("tags", "active"))
 	})
 	if err == nil {
 		t.Fatal("Delete: expected error from deleteFile, got nil")
@@ -635,7 +636,7 @@ func TestReadwriteTx_Delete_MapOfRecords_EncodeError(t *testing.T) {
 			return nil, fmt.Errorf("injected encode error")
 		},
 	}
-	err = tx.Delete(ctx, dal.NewKeyWithID("tags", "active"))
+	err = tx.Delete(ctx, record.NewKeyWithID("tags", "active"))
 	if err == nil {
 		t.Fatal("Delete: expected encode error, got nil")
 	}

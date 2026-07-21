@@ -11,6 +11,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/dalgo/recordset"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -80,17 +81,17 @@ func (db *githubDB) RunReadwriteTransaction(ctx context.Context, f dal.RWTxWorke
 	return f(ctx, tx)
 }
 
-func (db *githubDB) Get(ctx context.Context, record dal.Record) error {
+func (db *githubDB) Get(ctx context.Context, record dalrecord.Record) error {
 	tx := readonlyTx{db: db}
 	return tx.Get(ctx, record)
 }
 
-func (db *githubDB) Exists(ctx context.Context, key *dal.Key) (bool, error) {
+func (db *githubDB) Exists(ctx context.Context, key *dalrecord.Key) (bool, error) {
 	tx := readonlyTx{db: db}
 	return tx.Exists(ctx, key)
 }
 
-func (db *githubDB) GetMulti(ctx context.Context, records []dal.Record) error {
+func (db *githubDB) GetMulti(ctx context.Context, records []dalrecord.Record) error {
 	tx := readonlyTx{db: db}
 	return tx.GetMulti(ctx, records)
 }

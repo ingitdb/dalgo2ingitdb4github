@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -40,7 +41,7 @@ func TestReadonlyTx_Exists(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
-		key := dal.NewKeyWithID("test", "test")
+		key := dalrecord.NewKeyWithID("test", "test")
 		// Unknown collection → treated as not-found → Exists reports false, no error.
 		exists, existsErr := tx.Exists(ctx, key)
 		if existsErr != nil {
@@ -68,8 +69,8 @@ func TestReadonlyTx_GetMulti(t *testing.T) {
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		// A record in a collection absent from the definition must be marked
 		// not-found per-record, not fail the whole batch.
-		rec := dal.NewRecordWithData(dal.NewKeyWithID("NonExistingKind", "x"), map[string]any{})
-		records := []dal.Record{rec}
+		rec := dalrecord.NewRecordWithData(dalrecord.NewKeyWithID("NonExistingKind", "x"), map[string]any{})
+		records := []dalrecord.Record{rec}
 		getMultiErr := tx.GetMulti(ctx, records)
 		if getMultiErr != nil {
 			t.Fatalf("GetMulti() unexpected error: %v", getMultiErr)
@@ -148,8 +149,8 @@ func TestReadonlyTx_Get_NoDefinition(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
-		key := dal.NewKeyWithID("test", "test")
-		record := dal.NewRecordWithData(key, map[string]any{})
+		key := dalrecord.NewKeyWithID("test", "test")
+		record := dalrecord.NewRecordWithData(key, map[string]any{})
 		getErr := tx.Get(ctx, record)
 		if getErr == nil {
 			t.Fatal("Get() expected error for missing definition, got nil")
@@ -177,8 +178,8 @@ func TestReadonlyTx_Get_CollectionNotFound(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
-		key := dal.NewKeyWithID("nonexistent", "test")
-		record := dal.NewRecordWithData(key, map[string]any{})
+		key := dalrecord.NewKeyWithID("nonexistent", "test")
+		record := dalrecord.NewRecordWithData(key, map[string]any{})
 		// A record in a collection absent from the definition is treated as
 		// not-found (not a hard error), per the dalgo Getter contract: Get returns
 		// nil and marks the record not-found so GetMulti can continue.
@@ -225,8 +226,8 @@ func TestReadonlyTx_Get_UnsupportedRecordType(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
-		key := dal.NewKeyWithID("test", "test")
-		record := dal.NewRecordWithData(key, map[string]any{})
+		key := dalrecord.NewKeyWithID("test", "test")
+		record := dalrecord.NewRecordWithData(key, map[string]any{})
 		getErr := tx.Get(ctx, record)
 		if getErr == nil {
 			t.Fatal("Get() expected error for unsupported record type, got nil")
@@ -260,7 +261,7 @@ func TestReadonlyTx_ResolveCollection_NoRecordFile(t *testing.T) {
 	}
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		key := dal.NewKeyWithID("test", "test")
+		key := dalrecord.NewKeyWithID("test", "test")
 		deleteErr := tx.Delete(ctx, key)
 		if deleteErr == nil {
 			t.Fatal("Delete() expected error for missing record file, got nil")
@@ -307,9 +308,9 @@ func TestReadonlyTx_GetMapOfRecords_RecordNotInMap(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "nonexistent")
+	key := dalrecord.NewKeyWithID("todo.tags", "nonexistent")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
