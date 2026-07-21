@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dal-go/dalgo/dal"
+	"github.com/dal-go/record"
 	"github.com/google/go-github/v88/github"
 )
 
@@ -102,7 +102,7 @@ func TestBatchingGitHubDB_Get_ReadAfterWrite(t *testing.T) {
 		t.Fatalf("NewBatchingGitHubDB: %v", err)
 	}
 
-	rec := dal.NewRecordWithData(dal.NewKeyWithID("tags", "active"), map[string]any{})
+	rec := record.NewRecordWithData(record.NewKeyWithID("tags", "active"), map[string]any{})
 	if getErr := bdb.Get(context.Background(), rec); getErr != nil {
 		t.Fatalf("Get: %v", getErr)
 	}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/dal-go/dalgo/dal"
+	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -44,7 +44,7 @@ var errCollectionNotInDefinition = errors.New("collection not found in definitio
 // only DirPath overridden; RecordFile, Columns, format, etc. still come from the
 // subcollection's own schema so encoding/decoding is unaffected. Paths use
 // forward slashes (path.Join) because inGitDB repo paths are always POSIX.
-func resolveScopedCollection(def *ingitdb.Definition, collection string, parent *dal.Key) (*ingitdb.CollectionDef, error) {
+func resolveScopedCollection(def *ingitdb.Definition, collection string, parent *record.Key) (*ingitdb.CollectionDef, error) {
 	if def == nil {
 		return nil, fmt.Errorf("definition is required")
 	}

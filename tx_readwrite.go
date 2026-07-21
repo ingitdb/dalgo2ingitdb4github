@@ -6,9 +6,10 @@ import (
 	"fmt"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/dal-go/dalgo/update"
+	"github.com/dal-go/record/update"
 	"github.com/pelletier/go-toml/v2"
 
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 	"gopkg.in/yaml.v3"
 )
@@ -23,7 +24,7 @@ type readwriteTx struct {
 	encodeRecordFn func(map[string]any, ingitdb.RecordFormat) ([]byte, error)
 }
 
-func (r readwriteTx) Set(ctx context.Context, record dal.Record) error {
+func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 	colDef, recordKey, err := r.resolveCollection(record.Key())
 	if err != nil {
 		return err
@@ -84,7 +85,7 @@ func (r readwriteTx) Set(ctx context.Context, record dal.Record) error {
 	return nil
 }
 
-func (r readwriteTx) Insert(ctx context.Context, record dal.Record, opts ...dal.InsertOption) error {
+func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts ...dal.InsertOption) error {
 	_ = opts
 	colDef, recordKey, err := r.resolveCollection(record.Key())
 	if err != nil {
@@ -155,7 +156,7 @@ func (r readwriteTx) Insert(ctx context.Context, record dal.Record, opts ...dal.
 	return nil
 }
 
-func (r readwriteTx) Delete(ctx context.Context, key *dal.Key) error {
+func (r readwriteTx) Delete(ctx context.Context, key *dalrecord.Key) error {
 	colDef, recordKey, err := r.resolveCollection(key)
 	if err != nil {
 		return err
@@ -214,25 +215,25 @@ func (r readwriteTx) Delete(ctx context.Context, key *dal.Key) error {
 	return nil
 }
 
-func (r readwriteTx) SetMulti(ctx context.Context, records []dal.Record) error {
+func (r readwriteTx) SetMulti(ctx context.Context, records []dalrecord.Record) error {
 	_, _ = ctx, records
 	return fmt.Errorf("not implemented by %s", DatabaseID)
 }
 
-func (r readwriteTx) DeleteMulti(ctx context.Context, keys []*dal.Key) error {
+func (r readwriteTx) DeleteMulti(ctx context.Context, keys []*dalrecord.Key) error {
 	_, _ = ctx, keys
 	return fmt.Errorf("not implemented by %s", DatabaseID)
 }
 
 // Update applies field-level updates by reading the record, mutating it in
 // memory, then writing it back via Set. Updating a non-existent record returns
-// dal.ErrRecordNotFound (Update is not idempotent, unlike Delete). Preconditions
+// record.ErrRecordNotFound (Update is not idempotent, unlike Delete). Preconditions
 // are not supported.
-func (r readwriteTx) Update(ctx context.Context, key *dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
+func (r readwriteTx) Update(ctx context.Context, key *dalrecord.Key, updates []update.Update, preconditions ...dal.Precondition) error {
 	if len(preconditions) > 0 {
 		return fmt.Errorf("%w: Update preconditions are not supported by %s", dal.ErrNotSupported, DatabaseID)
 	}
-	rec := dal.NewRecordWithData(key, map[string]any{})
+	rec := dalrecord.NewRecordWithData(key, map[string]any{})
 	if err := r.Get(ctx, rec); err != nil {
 		return err
 	}
@@ -240,7 +241,7 @@ func (r readwriteTx) Update(ctx context.Context, key *dal.Key, updates []update.
 	// nil. record.Error() masks not-found (returns nil), so detect absence via
 	// Exists() and surface ErrRecordNotFound (Update is not idempotent).
 	if !rec.Exists() {
-		return dal.ErrRecordNotFound
+		return dalrecord.ErrRecordNotFound
 	}
 	data, ok := rec.Data().(map[string]any)
 	if !ok {
@@ -249,19 +250,19 @@ func (r readwriteTx) Update(ctx context.Context, key *dal.Key, updates []update.
 	if err := applyUpdates(data, updates); err != nil {
 		return err
 	}
-	return r.Set(ctx, dal.NewRecordWithData(key, data))
+	return r.Set(ctx, dalrecord.NewRecordWithData(key, data))
 }
 
-func (r readwriteTx) UpdateRecord(ctx context.Context, record dal.Record, updates []update.Update, preconditions ...dal.Precondition) error {
+func (r readwriteTx) UpdateRecord(ctx context.Context, record dalrecord.Record, updates []update.Update, preconditions ...dal.Precondition) error {
 	return r.Update(ctx, record.Key(), updates, preconditions...)
 }
 
-func (r readwriteTx) UpdateMulti(ctx context.Context, keys []*dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
+func (r readwriteTx) UpdateMulti(ctx context.Context, keys []*dalrecord.Key, updates []update.Update, preconditions ...dal.Precondition) error {
 	_, _, _, _ = ctx, keys, updates, preconditions
 	return fmt.Errorf("not implemented by %s", DatabaseID)
 }
 
-func (r readwriteTx) InsertMulti(ctx context.Context, records []dal.Record, opts ...dal.InsertOption) error {
+func (r readwriteTx) InsertMulti(ctx context.Context, records []dalrecord.Record, opts ...dal.InsertOption) error {
 	_, _, _ = ctx, records, opts
 	return fmt.Errorf("not implemented by %s", DatabaseID)
 }

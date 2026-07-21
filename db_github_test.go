@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -52,9 +53,9 @@ func TestGitHubDB_GetSingleRecord(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -101,9 +102,9 @@ func TestGitHubDB_GetMapOfRecords(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	data := map[string]any{}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -146,8 +147,8 @@ func TestGitHubDB_GetNotFound(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "missing")
-	record := dal.NewRecordWithData(key, map[string]any{})
+	key := dalrecord.NewKeyWithID("todo.tags", "missing")
+	record := dalrecord.NewRecordWithData(key, map[string]any{})
 	ctx := context.Background()
 	err = db.RunReadonlyTransaction(ctx, func(ctx context.Context, tx dal.ReadTransaction) error {
 		return tx.Get(ctx, record)
@@ -191,9 +192,9 @@ func TestGitHubDB_SetSingleRecord(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	data := map[string]any{"title": "Updated"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Set(ctx, record)
@@ -231,9 +232,9 @@ func TestGitHubDB_InsertSingleRecord(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "new")
+	key := dalrecord.NewKeyWithID("todo.tags", "new")
 	data := map[string]any{"title": "New"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -274,9 +275,9 @@ func TestGitHubDB_InsertSingleRecord_AlreadyExists(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	data := map[string]any{"title": "Active"}
-	record := dal.NewRecordWithData(key, data)
+	record := dalrecord.NewRecordWithData(key, data)
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Insert(ctx, record)
@@ -317,7 +318,7 @@ func TestGitHubDB_DeleteSingleRecord(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "active")
+	key := dalrecord.NewKeyWithID("todo.tags", "active")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)
@@ -355,7 +356,7 @@ func TestGitHubDB_DeleteSingleRecord_NotFound(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	key := dal.NewKeyWithID("todo.tags", "missing")
+	key := dalrecord.NewKeyWithID("todo.tags", "missing")
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		return tx.Delete(ctx, key)

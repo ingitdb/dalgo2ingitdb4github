@@ -1,7 +1,7 @@
 package dalgo2ghingitdb
 
 // parent_chain_test.go is the regression suite for the per-parent ("per-space")
-// scoping fix. Before the fix the adapter mapped a dal.Key to an in-repo path
+// scoping fix. Before the fix the adapter mapped a record.Key to an in-repo path
 // using only the leaf collection + record id, dropping the parent chain, so two
 // keys that share a leaf (e.g. contacts/c1) but live under different parents
 // (spaces/family vs spaces/work) collided on the same file and clobbered each
@@ -20,6 +20,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
+	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -120,8 +121,8 @@ func TestResolveScopedCollection_DistinctPathsForSameLeaf(t *testing.T) {
 	t.Parallel()
 	def := spacesWithContactsSubDef()
 
-	familyKey := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "family"), "contacts", "c1")
-	workKey := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "work"), "contacts", "c1")
+	familyKey := record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "family"), "contacts", "c1")
+	workKey := record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "work"), "contacts", "c1")
 
 	familyDef, err := resolveScopedCollection(def, familyKey.Collection(), familyKey.Parent())
 	if err != nil {
@@ -148,7 +149,7 @@ func TestResolveScopedCollection_DistinctPathsForSameLeaf(t *testing.T) {
 	}
 
 	// Top-level key is untouched: flat schema-declared DirPath.
-	topKey := dal.NewKeyWithID("spaces", "family")
+	topKey := record.NewKeyWithID("spaces", "family")
 	topDef, err := resolveScopedCollection(def, topKey.Collection(), topKey.Parent())
 	if err != nil {
 		t.Fatalf("resolveScopedCollection(top-level): %v", err)
@@ -180,7 +181,7 @@ func TestResolveScopedCollection_DeepNesting(t *testing.T) {
 	def := &ingitdb.Definition{Collections: map[string]*ingitdb.CollectionDef{"spaces": spaces}}
 
 	// key: spaces/s1/projects/p1/tasks/t1
-	parent := dal.NewKeyWithParentAndID(dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "s1"), "projects", "p1"), "tasks", "t1").Parent()
+	parent := record.NewKeyWithParentAndID(record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "s1"), "projects", "p1"), "tasks", "t1").Parent()
 	colDef, err := resolveScopedCollection(def, "tasks", parent)
 	if err != nil {
 		t.Fatalf("resolveScopedCollection: %v", err)
@@ -196,18 +197,18 @@ func TestResolveScopedCollection_Errors(t *testing.T) {
 	t.Parallel()
 	def := spacesWithContactsSubDef()
 
-	if _, err := resolveScopedCollection(nil, "contacts", dal.NewKeyWithID("spaces", "x")); err == nil {
+	if _, err := resolveScopedCollection(nil, "contacts", record.NewKeyWithID("spaces", "x")); err == nil {
 		t.Error("nil definition: expected error, got nil")
 	}
 
 	// Unknown root collection with a parent.
-	if _, err := resolveScopedCollection(def, "contacts", dal.NewKeyWithID("unknown", "x")); err == nil ||
+	if _, err := resolveScopedCollection(def, "contacts", record.NewKeyWithID("unknown", "x")); err == nil ||
 		!strings.Contains(err.Error(), "not found in definition") {
 		t.Errorf("unknown root: got %v, want 'not found in definition'", err)
 	}
 
 	// Unknown subcollection under a known parent record.
-	if _, err := resolveScopedCollection(def, "widgets", dal.NewKeyWithID("spaces", "family")); err == nil ||
+	if _, err := resolveScopedCollection(def, "widgets", record.NewKeyWithID("spaces", "family")); err == nil ||
 		!strings.Contains(err.Error(), "not found in definition") {
 		t.Errorf("unknown subcollection: got %v, want 'not found in definition'", err)
 	}
@@ -232,21 +233,21 @@ func TestGitHubDB_NestedKeys_ScopedByParentRecord(t *testing.T) {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
 
-	familyContact := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "family"), "contacts", "c1")
-	workContact := dal.NewKeyWithParentAndID(dal.NewKeyWithID("spaces", "work"), "contacts", "c1")
+	familyContact := record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "family"), "contacts", "c1")
+	workContact := record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "work"), "contacts", "c1")
 
 	ctx := context.Background()
 	if err := db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		if setErr := tx.Set(ctx, dal.NewRecordWithData(familyContact, map[string]any{"name": "Alice"})); setErr != nil {
+		if setErr := tx.Set(ctx, record.NewRecordWithData(familyContact, map[string]any{"name": "Alice"})); setErr != nil {
 			return setErr
 		}
-		return tx.Set(ctx, dal.NewRecordWithData(workContact, map[string]any{"name": "Bob"}))
+		return tx.Set(ctx, record.NewRecordWithData(workContact, map[string]any{"name": "Bob"}))
 	}); err != nil {
 		t.Fatalf("write nested contacts: %v", err)
 	}
 
-	famRec := dal.NewRecordWithData(familyContact, map[string]any{})
-	workRec := dal.NewRecordWithData(workContact, map[string]any{})
+	famRec := record.NewRecordWithData(familyContact, map[string]any{})
+	workRec := record.NewRecordWithData(workContact, map[string]any{})
 	if getErr := db.Get(ctx, famRec); getErr != nil {
 		t.Fatalf("get family contact: %v", getErr)
 	}

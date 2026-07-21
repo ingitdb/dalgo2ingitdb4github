@@ -12,6 +12,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 
+	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -163,7 +164,7 @@ func TestBatchingGitHubDB_OneCommitPerBatch(t *testing.T) {
 	// Worker writes three records — should produce ONE commit, not three.
 	err = bdb.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
 		for _, name := range []string{"ie", "gb", "us"} {
-			rec := dal.NewRecordWithData(dal.NewKeyWithID("cities", name), map[string]any{"region": "world"})
+			rec := record.NewRecordWithData(record.NewKeyWithID("cities", name), map[string]any{"region": "world"})
 			if setErr := tx.Set(ctx, rec); setErr != nil {
 				return setErr
 			}
@@ -223,7 +224,7 @@ func TestBatchingGitHubDB_WorkerErrorSkipsFlush(t *testing.T) {
 
 	wantErr := errors.New("worker decided to bail")
 	err = bdb.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		_ = tx.Set(ctx, dal.NewRecordWithData(dal.NewKeyWithID("cities", "ie"), map[string]any{"x": 1}))
+		_ = tx.Set(ctx, record.NewRecordWithData(record.NewKeyWithID("cities", "ie"), map[string]any{"x": 1}))
 		return wantErr
 	})
 	if !errors.Is(err, wantErr) {

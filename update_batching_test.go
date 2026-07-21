@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/dal-go/dalgo/update"
+	"github.com/dal-go/record/update"
 
+	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -47,7 +48,7 @@ func runBatchUpdate(t *testing.T, collection, id, seedYAML string, updates []upd
 		mapColDefs:    make(map[string]*ingitdb.CollectionDef),
 		mapLoaded:     make(map[string]bool),
 	}
-	updErr = txOuter.Update(context.Background(), dal.NewKeyWithID(collection, id), updates)
+	updErr = txOuter.Update(context.Background(), record.NewKeyWithID(collection, id), updates)
 	if updErr == nil {
 		buffered = txOuter.bufferedFiles[seedFixturePath(def, collection, id)].Content
 	}
@@ -151,10 +152,10 @@ func TestBatchingTx_Update_MissingRecord_NotFound(t *testing.T) {
 		t.Fatalf("NewBatchingGitHubDB: %v", err)
 	}
 	upErr := bdb.RunReadwriteTransaction(context.Background(), func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Update(ctx, dal.NewKeyWithID("tags", "missing"),
+		return tx.Update(ctx, record.NewKeyWithID("tags", "missing"),
 			[]update.Update{update.ByFieldName("title", "X")})
 	})
-	if !dal.IsNotFound(upErr) {
+	if !record.IsNotFound(upErr) {
 		t.Fatalf("Update missing record error = %v, want not-found", upErr)
 	}
 }
@@ -185,7 +186,7 @@ func TestBatchingTx_Update_MapOfRecords(t *testing.T) {
 		mapLoaded:     make(map[string]bool),
 	}
 	ctx := context.Background()
-	if upErr := tx.Update(ctx, dal.NewKeyWithID("tags", "active"), []update.Update{
+	if upErr := tx.Update(ctx, record.NewKeyWithID("tags", "active"), []update.Update{
 		update.ByFieldName("title", "New"),
 		update.ByFieldName("count", dal.Increment(1)),
 	}); upErr != nil {
@@ -202,8 +203,8 @@ func TestBatchingTx_Update_MapOfRecords(t *testing.T) {
 	}
 
 	// Updating a missing entry must be not-found.
-	if upErr := tx.Update(ctx, dal.NewKeyWithID("tags", "ghost"),
-		[]update.Update{update.ByFieldName("title", "X")}); !dal.IsNotFound(upErr) {
+	if upErr := tx.Update(ctx, record.NewKeyWithID("tags", "ghost"),
+		[]update.Update{update.ByFieldName("title", "X")}); !record.IsNotFound(upErr) {
 		t.Fatalf("Update missing map entry = %v, want not-found", upErr)
 	}
 }
@@ -233,10 +234,10 @@ func TestBatchingTx_Update_PrefersBufferedContent(t *testing.T) {
 		mapLoaded:     make(map[string]bool),
 	}
 	ctx := context.Background()
-	if setErr := tx.Set(ctx, readyRecord(dal.NewKeyWithID("tags", "k"), map[string]any{"count": 1})); setErr != nil {
+	if setErr := tx.Set(ctx, readyRecord(record.NewKeyWithID("tags", "k"), map[string]any{"count": 1})); setErr != nil {
 		t.Fatalf("Set: %v", setErr)
 	}
-	if upErr := tx.Update(ctx, dal.NewKeyWithID("tags", "k"),
+	if upErr := tx.Update(ctx, record.NewKeyWithID("tags", "k"),
 		[]update.Update{update.ByFieldName("count", dal.Increment(1))}); upErr != nil {
 		t.Fatalf("Update: %v", upErr)
 	}

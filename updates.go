@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/dal-go/dalgo/update"
+	"github.com/dal-go/record/update"
 )
 
 // applyUpdates mutates data according to updates. It mirrors the filesystem

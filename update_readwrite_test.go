@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/dal-go/dalgo/update"
+	"github.com/dal-go/record"
+	"github.com/dal-go/record/update"
 )
 
 // TestReadwriteTx_Update_SingleRecord verifies the non-batching Update path:
@@ -32,7 +33,7 @@ func TestReadwriteTx_Update_SingleRecord(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Update(ctx, dal.NewKeyWithID("tags", "active"), []update.Update{
+		return tx.Update(ctx, record.NewKeyWithID("tags", "active"), []update.Update{
 			update.ByFieldName("title", "New"),
 			update.ByFieldName("count", dal.Increment(2)),
 			update.ByFieldPath(update.FieldPath{"meta", "flag"}, true),
@@ -42,7 +43,7 @@ func TestReadwriteTx_Update_SingleRecord(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 
-	rec := dal.NewRecordWithData(dal.NewKeyWithID("tags", "active"), map[string]any{})
+	rec := record.NewRecordWithData(record.NewKeyWithID("tags", "active"), map[string]any{})
 	if getErr := db.Get(ctx, rec); getErr != nil {
 		t.Fatalf("Get after update: %v", getErr)
 	}
@@ -76,10 +77,10 @@ func TestReadwriteTx_Update_MissingRecord_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	err = db.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
-		return tx.Update(ctx, dal.NewKeyWithID("tags", "missing"),
+		return tx.Update(ctx, record.NewKeyWithID("tags", "missing"),
 			[]update.Update{update.ByFieldName("title", "X")})
 	})
-	if !dal.IsNotFound(err) {
+	if !record.IsNotFound(err) {
 		t.Fatalf("Update missing = %v, want not-found", err)
 	}
 }

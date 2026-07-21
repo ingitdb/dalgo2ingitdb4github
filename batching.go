@@ -6,8 +6,9 @@ import (
 	"fmt"
 
 	"github.com/dal-go/dalgo/dal"
-	"github.com/dal-go/dalgo/update"
+	"github.com/dal-go/record/update"
 
+	dalrecord "github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
@@ -147,7 +148,7 @@ var _ dal.ReadwriteTransaction = (*batchingTx)(nil)
 // commit message via tx.Options().Message() / SetMessage during execution.
 func (t *batchingTx) Options() dal.TransactionOptions { return t.opts }
 
-func (t *batchingTx) Set(ctx context.Context, record dal.Record) error {
+func (t *batchingTx) Set(ctx context.Context, record dalrecord.Record) error {
 	colDef, recordKey, err := t.resolveCollection(record.Key())
 	if err != nil {
 		return err
@@ -175,7 +176,7 @@ func (t *batchingTx) Set(ctx context.Context, record dal.Record) error {
 	}
 }
 
-func (t *batchingTx) Insert(ctx context.Context, record dal.Record, opts ...dal.InsertOption) error {
+func (t *batchingTx) Insert(ctx context.Context, record dalrecord.Record, opts ...dal.InsertOption) error {
 	_ = opts
 	colDef, recordKey, err := t.resolveCollection(record.Key())
 	if err != nil {
@@ -228,7 +229,7 @@ func (t *batchingTx) Insert(ctx context.Context, record dal.Record, opts ...dal.
 	}
 }
 
-func (t *batchingTx) Delete(ctx context.Context, key *dal.Key) error {
+func (t *batchingTx) Delete(ctx context.Context, key *dalrecord.Key) error {
 	colDef, recordKey, err := t.resolveCollection(key)
 	if err != nil {
 		return err
@@ -325,12 +326,12 @@ func (t *batchingTx) flushChanges() ([]TreeChange, error) {
 // follow the upstream readwriteTx behavior: they are not implemented and
 // return an error. Set-mode callers loop Set / Delete instead.
 
-func (t *batchingTx) SetMulti(ctx context.Context, records []dal.Record) error {
+func (t *batchingTx) SetMulti(ctx context.Context, records []dalrecord.Record) error {
 	_, _ = ctx, records
 	return fmt.Errorf("not implemented by %s (batching)", DatabaseID)
 }
 
-func (t *batchingTx) DeleteMulti(ctx context.Context, keys []*dal.Key) error {
+func (t *batchingTx) DeleteMulti(ctx context.Context, keys []*dalrecord.Key) error {
 	_, _ = ctx, keys
 	return fmt.Errorf("not implemented by %s (batching)", DatabaseID)
 }
@@ -340,8 +341,8 @@ func (t *batchingTx) DeleteMulti(ctx context.Context, keys []*dal.Key) error {
 // Set/Updated earlier in the tx, else reading the current file consistently via
 // the Git Data API), applies updates in memory, then buffers the result as a
 // write (exactly like Set). Unlike Delete, Update is NOT idempotent: updating a
-// record that does not exist returns dal.ErrRecordNotFound.
-func (t *batchingTx) Update(ctx context.Context, key *dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
+// record that does not exist returns record.ErrRecordNotFound.
+func (t *batchingTx) Update(ctx context.Context, key *dalrecord.Key, updates []update.Update, preconditions ...dal.Precondition) error {
 	if len(preconditions) > 0 {
 		return fmt.Errorf("%w: Update preconditions are not supported by %s (batching)", dal.ErrNotSupported, DatabaseID)
 	}
@@ -350,7 +351,7 @@ func (t *batchingTx) Update(ctx context.Context, key *dal.Key, updates []update.
 		if errors.Is(err, errCollectionNotInDefinition) {
 			// An unknown collection cannot hold the record → not-found (Update is
 			// not idempotent).
-			return dal.ErrRecordNotFound
+			return dalrecord.ErrRecordNotFound
 		}
 		return err
 	}
@@ -363,7 +364,7 @@ func (t *batchingTx) Update(ctx context.Context, key *dal.Key, updates []update.
 		}
 		existing, exists := t.workingMaps[recordPath][recordKey]
 		if !exists {
-			return dal.ErrRecordNotFound
+			return dalrecord.ErrRecordNotFound
 		}
 		data := ingitdb.ApplyLocaleToRead(existing, colDef.Columns)
 		if applyErr := applyUpdates(data, updates); applyErr != nil {
@@ -377,7 +378,7 @@ func (t *batchingTx) Update(ctx context.Context, key *dal.Key, updates []update.
 			return loadErr
 		}
 		if !found {
-			return dal.ErrRecordNotFound
+			return dalrecord.ErrRecordNotFound
 		}
 		if applyErr := applyUpdates(data, updates); applyErr != nil {
 			return applyErr
@@ -409,16 +410,16 @@ func (t *batchingTx) loadSingleForUpdate(ctx context.Context, recordPath string,
 	return t.readSingleRecord(ctx, recordPath, colDef)
 }
 
-func (t *batchingTx) UpdateRecord(ctx context.Context, record dal.Record, updates []update.Update, preconditions ...dal.Precondition) error {
+func (t *batchingTx) UpdateRecord(ctx context.Context, record dalrecord.Record, updates []update.Update, preconditions ...dal.Precondition) error {
 	return t.Update(ctx, record.Key(), updates, preconditions...)
 }
 
-func (t *batchingTx) UpdateMulti(ctx context.Context, keys []*dal.Key, updates []update.Update, preconditions ...dal.Precondition) error {
+func (t *batchingTx) UpdateMulti(ctx context.Context, keys []*dalrecord.Key, updates []update.Update, preconditions ...dal.Precondition) error {
 	_, _, _, _ = ctx, keys, updates, preconditions
 	return fmt.Errorf("not implemented by %s (batching)", DatabaseID)
 }
 
-func (t *batchingTx) InsertMulti(ctx context.Context, records []dal.Record, opts ...dal.InsertOption) error {
+func (t *batchingTx) InsertMulti(ctx context.Context, records []dalrecord.Record, opts ...dal.InsertOption) error {
 	_, _, _ = ctx, records, opts
 	return fmt.Errorf("not implemented by %s (batching)", DatabaseID)
 }

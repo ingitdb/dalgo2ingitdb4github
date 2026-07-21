@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
+	"github.com/dal-go/record"
 )
 
 // queryMockServer mocks the subset of the GitHub API a structured query needs:
@@ -116,9 +117,9 @@ func countriesBlobs() map[string]string {
 	}
 }
 
-func runQuery(t *testing.T, db dal.DB, q dal.Query) []dal.Record {
+func runQuery(t *testing.T, db dal.DB, q dal.Query) []record.Record {
 	t.Helper()
-	var out []dal.Record
+	var out []record.Record
 	err := db.RunReadonlyTransaction(context.Background(), func(ctx context.Context, tx dal.ReadTransaction) error {
 		reader, err := tx.ExecuteQueryToRecordsReader(ctx, q)
 		if err != nil {
@@ -142,7 +143,7 @@ func runQuery(t *testing.T, db dal.DB, q dal.Query) []dal.Record {
 	return out
 }
 
-func recordIDs(records []dal.Record) []string {
+func recordIDs(records []record.Record) []string {
 	ids := make([]string, len(records))
 	for i, rec := range records {
 		ids[i] = rec.Key().ID.(string)
@@ -157,8 +158,8 @@ func TestQuery_SelectAll(t *testing.T) {
 	db := newQueryTestDB(t, srv)
 
 	q := dal.From(dal.NewRootCollectionRef("countries", "")).NewQuery().
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
+		SelectIntoRecord(func() record.Record {
+			return record.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
 		})
 	records := runQuery(t, db, q)
 
@@ -189,8 +190,8 @@ func TestQuery_WhereFieldEquals(t *testing.T) {
 
 	q := dal.From(dal.NewRootCollectionRef("countries", "")).NewQuery().
 		WhereField("name", dal.Equal, "Ireland").
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
+		SelectIntoRecord(func() record.Record {
+			return record.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
 		})
 	records := runQuery(t, db, q)
 
@@ -207,8 +208,8 @@ func TestQuery_OrderByAscendingAndDescending(t *testing.T) {
 
 	asc := dal.From(dal.NewRootCollectionRef("countries", "")).NewQuery().
 		OrderBy(dal.AscendingField("population")).
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
+		SelectIntoRecord(func() record.Record {
+			return record.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
 		})
 	if got := recordIDs(runQuery(t, db, asc)); !reflect.DeepEqual(got, []string{"ie", "gb", "us"}) {
 		t.Errorf("ORDER BY population ASC: got %v, want [ie gb us]", got)
@@ -216,8 +217,8 @@ func TestQuery_OrderByAscendingAndDescending(t *testing.T) {
 
 	desc := dal.From(dal.NewRootCollectionRef("countries", "")).NewQuery().
 		OrderBy(dal.DescendingField("population")).
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
+		SelectIntoRecord(func() record.Record {
+			return record.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
 		})
 	if got := recordIDs(runQuery(t, db, desc)); !reflect.DeepEqual(got, []string{"us", "gb", "ie"}) {
 		t.Errorf("ORDER BY population DESC: got %v, want [us gb ie]", got)
@@ -233,8 +234,8 @@ func TestQuery_Limit(t *testing.T) {
 	q := dal.From(dal.NewRootCollectionRef("countries", "")).NewQuery().
 		OrderBy(dal.DescendingField("population")).
 		Limit(2).
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
+		SelectIntoRecord(func() record.Record {
+			return record.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
 		})
 	if got := recordIDs(runQuery(t, db, q)); !reflect.DeepEqual(got, []string{"us", "gb"}) {
 		t.Errorf("LIMIT 2 over DESC population: got %v, want [us gb]", got)
@@ -270,8 +271,8 @@ func TestQuery_UnknownCollectionReturnsEmpty(t *testing.T) {
 	db := newQueryTestDB(t, srv)
 
 	q := dal.From(dal.NewRootCollectionRef("cities", "")).NewQuery().
-		SelectIntoRecord(func() dal.Record {
-			return dal.NewRecordWithIncompleteKey("cities", reflect.String, map[string]any{})
+		SelectIntoRecord(func() record.Record {
+			return record.NewRecordWithIncompleteKey("cities", reflect.String, map[string]any{})
 		})
 	if records := runQuery(t, db, q); len(records) != 0 {
 		t.Fatalf("unknown collection: got %d records, want 0", len(records))
@@ -287,8 +288,8 @@ func TestQuery_UnsupportedClausesReturnNotSupported(t *testing.T) {
 	newBase := func() dal.IQueryBuilder {
 		return dal.From(dal.NewRootCollectionRef("countries", "")).NewQuery()
 	}
-	into := func() dal.Record {
-		return dal.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
+	into := func() record.Record {
+		return record.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
 	}
 	cases := map[string]dal.Query{
 		"offset":     newBase().Offset(1).SelectIntoRecord(into),
