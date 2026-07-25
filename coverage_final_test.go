@@ -627,7 +627,7 @@ func TestReadwriteTx_Delete_MapOfRecords_EncodeError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
-	concreteDB := db.(*githubDB)
+	concreteDB := dal.BackendOf(db).(*githubDB)
 
 	ctx := context.Background()
 	tx := readwriteTx{

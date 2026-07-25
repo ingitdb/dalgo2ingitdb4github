@@ -15,7 +15,7 @@ import (
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
-var _ dal.DB = (*githubDB)(nil)
+var _ dal.Backend = (*githubDB)(nil)
 
 // NewGitHubDB creates a GitHub repository adapter.
 // Note: Definition is required for most operations, so prefer NewGitHubDBWithDef.
@@ -28,7 +28,7 @@ func NewGitHubDB(cfg Config) (dal.DB, error) {
 		cfg:        cfg,
 		fileReader: reader.(*githubFileReader),
 	}
-	return db, nil
+	return dal.NewDB(db), nil
 }
 
 func NewGitHubDBWithDef(cfg Config, def *ingitdb.Definition) (dal.DB, error) {
@@ -44,7 +44,7 @@ func NewGitHubDBWithDef(cfg Config, def *ingitdb.Definition) (dal.DB, error) {
 		def:        def,
 		fileReader: reader.(*githubFileReader),
 	}
-	return db, nil
+	return dal.NewDB(db), nil
 }
 
 type githubDB struct {

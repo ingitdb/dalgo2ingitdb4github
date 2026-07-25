@@ -117,10 +117,13 @@ func (db *BatchingGitHubDB) RunReadwriteTransaction(ctx context.Context, f dal.R
 	return nil
 }
 
-// Compile-time check: BatchingGitHubDB satisfies dal.DB. The embedded
+// Compile-time check: BatchingGitHubDB satisfies dal.Backend. The embedded
 // *githubDB supplies every method except the overridden
-// RunReadwriteTransaction.
-var _ dal.DB = (*BatchingGitHubDB)(nil)
+// RunReadwriteTransaction. BatchingGitHubDB is itself a Backend composed over
+// another Backend (githubDB), not a decorator over a sealed dal.DB — callers
+// that need a sealed dal.DB wrap the result with dal.NewDB themselves, the
+// same as they would for githubDB.
+var _ dal.Backend = (*BatchingGitHubDB)(nil)
 
 // batchingTx implements dal.ReadwriteTransaction by buffering all writes.
 //
