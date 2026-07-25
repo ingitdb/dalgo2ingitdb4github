@@ -158,9 +158,9 @@ func (t *batchingTx) Set(ctx context.Context, record dalrecord.Record) error {
 	}
 	recordPath := resolveRecordPath(colDef, recordKey)
 	record.SetError(nil)
-	data, ok := record.Data().(map[string]any)
-	if !ok {
-		return fmt.Errorf("record data is not map[string]any")
+	data, err := dalrecord.DataToMap(record.Data())
+	if err != nil {
+		return err
 	}
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.MapOfRecords:
@@ -186,9 +186,9 @@ func (t *batchingTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 		return err
 	}
 	recordPath := resolveRecordPath(colDef, recordKey)
-	data, ok := record.Data().(map[string]any)
-	if !ok {
-		return fmt.Errorf("record data is not map[string]any")
+	data, err := dalrecord.DataToMap(record.Data())
+	if err != nil {
+		return err
 	}
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.MapOfRecords:

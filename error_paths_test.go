@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
@@ -49,9 +50,8 @@ func TestReadwriteTx_Set_InvalidRecordData(t *testing.T) {
 	if err == nil {
 		t.Fatal("Set() expected error for invalid record data, got nil")
 	}
-	expectedMsg := "record data is not map[string]any"
-	if err.Error() != expectedMsg {
-		t.Errorf("Set() error = %q, want %q", err.Error(), expectedMsg)
+	if !strings.Contains(err.Error(), "convert data of type string to map") {
+		t.Errorf("Set() error = %q, want a record.DataToMap conversion error", err.Error())
 	}
 }
 
@@ -92,9 +92,8 @@ func TestReadwriteTx_Set_MapOfRecords_InvalidRecordData(t *testing.T) {
 	if err == nil {
 		t.Fatal("Set() expected error for invalid record data, got nil")
 	}
-	expectedMsg := "record data is not map[string]any"
-	if err.Error() != expectedMsg {
-		t.Errorf("Set() error = %q, want %q", err.Error(), expectedMsg)
+	if !strings.Contains(err.Error(), "convert data of type string to map") {
+		t.Errorf("Set() error = %q, want a record.DataToMap conversion error", err.Error())
 	}
 }
 
@@ -131,9 +130,8 @@ func TestReadwriteTx_Insert_InvalidRecordData(t *testing.T) {
 	if err == nil {
 		t.Fatal("Insert() expected error for invalid record data, got nil")
 	}
-	expectedMsg := "record data is not map[string]any"
-	if err.Error() != expectedMsg {
-		t.Errorf("Insert() error = %q, want %q", err.Error(), expectedMsg)
+	if !strings.Contains(err.Error(), "convert data of type string to map") {
+		t.Errorf("Insert() error = %q, want a record.DataToMap conversion error", err.Error())
 	}
 }
 
@@ -174,9 +172,8 @@ func TestReadwriteTx_Insert_MapOfRecords_InvalidRecordData(t *testing.T) {
 	if err == nil {
 		t.Fatal("Insert() expected error for invalid record data, got nil")
 	}
-	expectedMsg := "record data is not map[string]any"
-	if err.Error() != expectedMsg {
-		t.Errorf("Insert() error = %q, want %q", err.Error(), expectedMsg)
+	if !strings.Contains(err.Error(), "convert data of type string to map") {
+		t.Errorf("Insert() error = %q, want a record.DataToMap conversion error", err.Error())
 	}
 }
 

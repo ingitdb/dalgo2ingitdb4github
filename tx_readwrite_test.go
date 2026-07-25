@@ -2,7 +2,7 @@ package dalgo2ghingitdb
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
@@ -46,9 +46,8 @@ func TestReadwriteTx_SetMulti(t *testing.T) {
 		if setMultiErr == nil {
 			t.Fatal("SetMulti() expected error, got nil")
 		}
-		expectedMsg := fmt.Sprintf("not implemented by %s", DatabaseID)
-		if setMultiErr.Error() != expectedMsg {
-			t.Errorf("SetMulti() error = %q, want %q", setMultiErr.Error(), expectedMsg)
+		if !errors.Is(setMultiErr, dal.ErrNotImplementedYet) {
+			t.Errorf("SetMulti() error = %v, want dal.ErrNotImplementedYet", setMultiErr)
 		}
 		return nil
 	})
@@ -72,9 +71,8 @@ func TestReadwriteTx_DeleteMulti(t *testing.T) {
 		if deleteMultiErr == nil {
 			t.Fatal("DeleteMulti() expected error, got nil")
 		}
-		expectedMsg := fmt.Sprintf("not implemented by %s", DatabaseID)
-		if deleteMultiErr.Error() != expectedMsg {
-			t.Errorf("DeleteMulti() error = %q, want %q", deleteMultiErr.Error(), expectedMsg)
+		if !errors.Is(deleteMultiErr, dal.ErrNotImplementedYet) {
+			t.Errorf("DeleteMulti() error = %v, want dal.ErrNotImplementedYet", deleteMultiErr)
 		}
 		return nil
 	})
@@ -146,9 +144,8 @@ func TestReadwriteTx_UpdateMulti(t *testing.T) {
 		if updateMultiErr == nil {
 			t.Fatal("UpdateMulti() expected error, got nil")
 		}
-		expectedMsg := fmt.Sprintf("not implemented by %s", DatabaseID)
-		if updateMultiErr.Error() != expectedMsg {
-			t.Errorf("UpdateMulti() error = %q, want %q", updateMultiErr.Error(), expectedMsg)
+		if !errors.Is(updateMultiErr, dal.ErrNotImplementedYet) {
+			t.Errorf("UpdateMulti() error = %v, want dal.ErrNotImplementedYet", updateMultiErr)
 		}
 		return nil
 	})
@@ -172,9 +169,8 @@ func TestReadwriteTx_InsertMulti(t *testing.T) {
 		if insertMultiErr == nil {
 			t.Fatal("InsertMulti() expected error, got nil")
 		}
-		expectedMsg := fmt.Sprintf("not implemented by %s", DatabaseID)
-		if insertMultiErr.Error() != expectedMsg {
-			t.Errorf("InsertMulti() error = %q, want %q", insertMultiErr.Error(), expectedMsg)
+		if !errors.Is(insertMultiErr, dal.ErrNotImplementedYet) {
+			t.Errorf("InsertMulti() error = %v, want dal.ErrNotImplementedYet", insertMultiErr)
 		}
 		return nil
 	})
