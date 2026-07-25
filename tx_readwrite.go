@@ -49,9 +49,9 @@ func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 				return parseErr
 			}
 		}
-		data, ok := record.Data().(map[string]any)
-		if !ok {
-			return fmt.Errorf("record data is not map[string]any")
+		data, convErr := dalrecord.DataToMap(record.Data())
+		if convErr != nil {
+			return convErr
 		}
 		allRecords[recordKey] = ingitdb.ApplyLocaleToWrite(data, colDef.Columns)
 		encoded, encodeErr := ingitdb.EncodeMapOfRecordsContent(
@@ -69,9 +69,9 @@ func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 		if readErr != nil {
 			return readErr
 		}
-		data, ok := record.Data().(map[string]any)
-		if !ok {
-			return fmt.Errorf("record data is not map[string]any")
+		data, convErr := dalrecord.DataToMap(record.Data())
+		if convErr != nil {
+			return convErr
 		}
 		encoded, encodeErr := encodeRecordContent(data, colDef.RecordFile.Format)
 		if encodeErr != nil {
@@ -116,9 +116,9 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 			return fmt.Errorf("record already exists: %s/%s", colDef.ID, recordKey)
 		}
 		record.SetError(nil)
-		data, ok := record.Data().(map[string]any)
-		if !ok {
-			return fmt.Errorf("record data is not map[string]any")
+		data, convErr := dalrecord.DataToMap(record.Data())
+		if convErr != nil {
+			return convErr
 		}
 		allRecords[recordKey] = ingitdb.ApplyLocaleToWrite(data, colDef.Columns)
 		encoded, encodeErr := ingitdb.EncodeMapOfRecordsContent(
@@ -140,9 +140,9 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 			return fmt.Errorf("record already exists: %s/%s", colDef.ID, recordKey)
 		}
 		record.SetError(nil)
-		data, ok := record.Data().(map[string]any)
-		if !ok {
-			return fmt.Errorf("record data is not map[string]any")
+		data, convErr := dalrecord.DataToMap(record.Data())
+		if convErr != nil {
+			return convErr
 		}
 		encoded, encodeErr := encodeRecordContent(data, colDef.RecordFile.Format)
 		if encodeErr != nil {
@@ -217,12 +217,12 @@ func (r readwriteTx) Delete(ctx context.Context, key *dalrecord.Key) error {
 
 func (r readwriteTx) SetMulti(ctx context.Context, records []dalrecord.Record) error {
 	_, _ = ctx, records
-	return fmt.Errorf("not implemented by %s", DatabaseID)
+	return fmt.Errorf("%w: not implemented by %s", dal.ErrNotImplementedYet, DatabaseID)
 }
 
 func (r readwriteTx) DeleteMulti(ctx context.Context, keys []*dalrecord.Key) error {
 	_, _ = ctx, keys
-	return fmt.Errorf("not implemented by %s", DatabaseID)
+	return fmt.Errorf("%w: not implemented by %s", dal.ErrNotImplementedYet, DatabaseID)
 }
 
 // Update applies field-level updates by reading the record, mutating it in
@@ -259,12 +259,12 @@ func (r readwriteTx) UpdateRecord(ctx context.Context, record dalrecord.Record, 
 
 func (r readwriteTx) UpdateMulti(ctx context.Context, keys []*dalrecord.Key, updates []update.Update, preconditions ...dal.Precondition) error {
 	_, _, _, _ = ctx, keys, updates, preconditions
-	return fmt.Errorf("not implemented by %s", DatabaseID)
+	return fmt.Errorf("%w: not implemented by %s", dal.ErrNotImplementedYet, DatabaseID)
 }
 
 func (r readwriteTx) InsertMulti(ctx context.Context, records []dalrecord.Record, opts ...dal.InsertOption) error {
 	_, _, _ = ctx, records, opts
-	return fmt.Errorf("not implemented by %s", DatabaseID)
+	return fmt.Errorf("%w: not implemented by %s", dal.ErrNotImplementedYet, DatabaseID)
 }
 
 func (r readwriteTx) ID() string {

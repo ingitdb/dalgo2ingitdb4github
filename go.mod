@@ -3,8 +3,8 @@ module github.com/ingitdb/dalgo2ingitdb4github
 go 1.26.0
 
 require (
-	github.com/dal-go/dalgo v0.63.1
-	github.com/dal-go/record v0.1.0
+	github.com/dal-go/dalgo v0.64.2
+	github.com/dal-go/record v0.1.1
 	github.com/google/go-github/v88 v88.0.0
 	github.com/ingitdb/ingitdb-go/ingitdb v0.5.2
 	github.com/pelletier/go-toml/v2 v2.4.3
@@ -12,7 +12,7 @@ require (
 )
 
 require (
-	github.com/RoaringBitmap/roaring/v2 v2.22.0 // indirect
+	github.com/RoaringBitmap/roaring/v2 v2.24.0 // indirect
 	github.com/bits-and-blooms/bitset v1.24.6 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/ingr-io/ingr-go v0.0.2 // indirect

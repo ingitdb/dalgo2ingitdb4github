@@ -161,8 +161,8 @@ func TestBatchingTx_Set_InvalidRecordData(t *testing.T) {
 	if err == nil {
 		t.Fatal("Set: expected error for non-map data, got nil")
 	}
-	if err.Error() != "record data is not map[string]any" {
-		t.Errorf("Set error = %q, want 'record data is not map[string]any'", err.Error())
+	if !strings.Contains(err.Error(), "convert data of type string to map") {
+		t.Errorf("Set error = %q, want a record.DataToMap conversion error", err.Error())
 	}
 }
 
@@ -190,8 +190,8 @@ func TestBatchingTx_Insert_InvalidRecordData(t *testing.T) {
 	if err == nil {
 		t.Fatal("Insert: expected error for non-map data, got nil")
 	}
-	if err.Error() != "record data is not map[string]any" {
-		t.Errorf("Insert error = %q, want 'record data is not map[string]any'", err.Error())
+	if !strings.Contains(err.Error(), "convert data of type string to map") {
+		t.Errorf("Insert error = %q, want a record.DataToMap conversion error", err.Error())
 	}
 }
 
@@ -627,7 +627,7 @@ func TestReadwriteTx_Delete_MapOfRecords_EncodeError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGitHubDBWithDef: %v", err)
 	}
-	concreteDB := db.(*githubDB)
+	concreteDB := dal.BackendOf(db).(*githubDB)
 
 	ctx := context.Background()
 	tx := readwriteTx{
