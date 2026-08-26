@@ -346,9 +346,19 @@ func TestReadwriteTx_InsertMapOfRecords_AlreadyExists(t *testing.T) {
 	if err == nil {
 		t.Fatal("Insert() expected error for existing record, got nil")
 	}
-	expectedMsg := "record already exists: todo.tags/active"
-	if err.Error() != expectedMsg {
-		t.Errorf("Insert() error = %q, want %q", err.Error(), expectedMsg)
+	// dal-go/record v0.1.3 added the cross-adapter ErrRecordExists sentinel
+	// (dalgo's dalgotest conformance suite now requires Insert-over-existing
+	// to satisfy record.IsAlreadyExists), so the error now wraps it. The
+	// prefix message is preserved unchanged; only the trailing %w changed.
+	if !errors.Is(err, dalrecord.ErrRecordExists) {
+		t.Errorf("Insert() error = %q, want it to satisfy errors.Is(err, record.ErrRecordExists)", err.Error())
+	}
+	if !dalrecord.IsAlreadyExists(err) {
+		t.Errorf("Insert() error = %q, want record.IsAlreadyExists(err) == true", err.Error())
+	}
+	wantPrefix := "record already exists: todo.tags/active"
+	if got := err.Error(); len(got) < len(wantPrefix) || got[:len(wantPrefix)] != wantPrefix {
+		t.Errorf("Insert() error = %q, want it to start with %q", got, wantPrefix)
 	}
 }
 

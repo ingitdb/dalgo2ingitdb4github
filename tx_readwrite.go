@@ -113,7 +113,7 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 			}
 		}
 		if _, exists := allRecords[recordKey]; exists {
-			return fmt.Errorf("record already exists: %s/%s", colDef.ID, recordKey)
+			return fmt.Errorf("record already exists: %s/%s: %w", colDef.ID, recordKey, dalrecord.ErrRecordExists)
 		}
 		record.SetError(nil)
 		data, convErr := dalrecord.DataToMap(record.Data())
@@ -137,7 +137,7 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 			return readErr
 		}
 		if found {
-			return fmt.Errorf("record already exists: %s/%s", colDef.ID, recordKey)
+			return fmt.Errorf("record already exists: %s/%s: %w", colDef.ID, recordKey, dalrecord.ErrRecordExists)
 		}
 		record.SetError(nil)
 		data, convErr := dalrecord.DataToMap(record.Data())
