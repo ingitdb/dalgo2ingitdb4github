@@ -460,13 +460,18 @@ func newGitHubContentsServer(t *testing.T, fixtures []githubFileFixture) *httpte
 			return
 		}
 
-		fixture, ok := fixtureByPath[requestedPath]
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-
-		if fixture.isDir {
+		// Directory listings are served only from the static fixture set —
+		// this fake does not track directory structure for paths written
+		// during the test. File content, however, MUST be served from the
+		// live contents map for any path, not just ones present in the
+		// initial fixtures: contents[requestedPath] is also updated by the
+		// PUT handler above, so a path a test writes via Insert/Set and
+		// then reads back (e.g. a duplicate-insert check) must be visible
+		// here even though it was never a static fixture. Gating this on
+		// fixtureByPath (as before) made every dynamically-written path
+		// 404 on readback, masking real duplicate-key detection in
+		// readwriteTx.Insert behind a false "not found".
+		if fixture, isFixture := fixtureByPath[requestedPath]; isFixture && fixture.isDir {
 			dirResponse := make([]map[string]any, 0, len(fixture.dirItems))
 			for _, item := range fixture.dirItems {
 				dirResponse = append(dirResponse, map[string]any{
