@@ -182,9 +182,10 @@ func TestTreeReader_ErrorAndEdgePaths(t *testing.T) {
 			http.Error(w, "tree fail", http.StatusInternalServerError)
 		case strings.Contains(p, "/git/trees/"):
 			blobSHA := "blob-ok"
-			if mode == "blob-err" {
+			switch mode {
+			case "blob-err":
 				blobSHA = "blob-err"
-			} else if mode == "bad-enc" {
+			case "bad-enc":
 				blobSHA = "blob-bad-enc"
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
