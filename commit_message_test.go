@@ -83,6 +83,7 @@ func runOneSetTx(t *testing.T, bdb *BatchingGitHubDB, options ...dal.Transaction
 // message (dal.TxWithMessage) is used as the commit message in place of the
 // construction-time default.
 func TestBatchingGitHubDB_TxMessageOverridesDefault(t *testing.T) {
+	t.Parallel()
 	var captured string
 	srv := newCommitMessageCapturingServer(t, &captured)
 	defer srv.Close()
@@ -103,6 +104,7 @@ func TestBatchingGitHubDB_TxMessageOverridesDefault(t *testing.T) {
 // TestBatchingGitHubDB_NoTxMessageUsesDefault verifies the construction-time
 // default is used when the transaction sets no message.
 func TestBatchingGitHubDB_NoTxMessageUsesDefault(t *testing.T) {
+	t.Parallel()
 	var captured string
 	srv := newCommitMessageCapturingServer(t, &captured)
 	defer srv.Close()

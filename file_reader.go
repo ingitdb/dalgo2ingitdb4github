@@ -87,18 +87,11 @@ func NewGitHubFileReader(cfg Config) (FileReader, error) {
 // through the Git Data API for read-after-write consistency (used by the
 // batching DB variant).
 func newConsistentGitHubFileReader(cfg Config) (*githubFileReader, error) {
-	if err := cfg.validate(); err != nil {
-		return nil, err
-	}
-	client, err := newGitHubAPIClient(cfg)
-	if err != nil {
-		return nil, err
-	}
 	tr, err := newTreeReader(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return &githubFileReader{cfg: cfg, client: client, consistent: tr}, nil
+	return &githubFileReader{cfg: cfg, client: tr.writer.client, consistent: tr}, nil
 }
 
 func (r githubFileReader) ReadFile(ctx context.Context, path string) (content []byte, found bool, err error) {

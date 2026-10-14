@@ -28,6 +28,7 @@ const skippedConformanceCheck = "accepts a valid record on UpdateRecord"
 // One check is skipped rather than run: see skippedConformanceCheck below.
 // Every other check runs for real and must pass.
 func TestConformance(t *testing.T) {
+	t.Parallel()
 	def := buildSingleRecordDef(dalgotest.DefaultCollection, "data/"+dalgotest.DefaultCollection, "{key}.yaml")
 	newDB := func(t *testing.T) (dal.DB, func()) {
 		server := newGitHubContentsServer(t, nil)

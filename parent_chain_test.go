@@ -212,6 +212,13 @@ func TestResolveScopedCollection_Errors(t *testing.T) {
 		!strings.Contains(err.Error(), "not found in definition") {
 		t.Errorf("unknown subcollection: got %v, want 'not found in definition'", err)
 	}
+
+	// Unknown intermediate subcollection in a deep parent chain.
+	deepParent := record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "family"), "missing_mid", "m1")
+	if _, err := resolveScopedCollection(def, "tasks", deepParent); err == nil ||
+		!strings.Contains(err.Error(), "not found in definition") {
+		t.Errorf("unknown intermediate subcollection: got %v, want 'not found in definition'", err)
+	}
 }
 
 // TestGitHubDB_NestedKeys_ScopedByParentRecord is the end-to-end round-trip

@@ -246,3 +246,135 @@ func TestBatchingTx_Update_PrefersBufferedContent(t *testing.T) {
 		t.Errorf("buffered content = %q, want count=2 (1 buffered + 1), not based on repo's 100", buffered)
 	}
 }
+
+func TestBatchingTx_Update_And_Commit_ErrorPaths(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	def := singleRecordDef("tags", "data/tags", "{key}.yaml")
+	recordPath := seedFixturePath(def, "tags", "k")
+	fixtures := map[string]string{
+		recordPath: "count: 1\n",
+	}
+	srv := makeBatchServer(t, fixtures)
+	defer srv.Close()
+
+	cfg := Config{Owner: "ingitdb", Repo: "ingitdb-cli", Ref: "main", APIBaseURL: srv.URL + "/"}
+	bdb, err := NewBatchingGitHubDB(cfg, def, "test: update")
+	if err != nil {
+		t.Fatalf("NewBatchingGitHubDB: %v", err)
+	}
+
+	newTx := func(db *githubDB) *batchingTx {
+		return &batchingTx{
+			readonlyTx:    readonlyTx{db: db},
+			opts:          dal.NewTransactionOptions(dal.TxWithMessage("opt-msg")),
+			bufferedFiles: make(map[string]TreeChange),
+			workingMaps:   make(map[string]map[string]map[string]any),
+			mapColDefs:    make(map[string]*ingitdb.CollectionDef),
+			mapLoaded:     make(map[string]bool),
+		}
+	}
+
+	tx := newTx(bdb.githubDB)
+	if got := tx.Options().Message(); got != "opt-msg" {
+		t.Errorf("tx.Options().Message() = %q, want opt-msg", got)
+	}
+
+	key := record.NewKeyWithID("tags", "k")
+
+	// 1. Preconditions not supported.
+	if err := tx.Update(ctx, key, nil, dal.WithExistsPrecondition()); err == nil {
+		t.Fatal("expected error for preconditions")
+	}
+
+	// 2. Non-errCollectionNotInDefinition error from resolveCollection (nil key).
+	if err := tx.Update(ctx, nil, nil); err == nil {
+		t.Fatal("expected error for nil key")
+	}
+
+	// 3. SingleRecord applyUpdates error.
+	if err := tx.Update(ctx, key, []update.Update{update.ByFieldName("count", stubTransform{name: "bad"})}); err == nil {
+		t.Fatal("expected applyUpdates error on SingleRecord")
+	}
+
+	// 4. SingleRecord buffered as deletion -> ErrRecordNotFound.
+	tx.bufferedFiles[recordPath] = TreeChange{Path: recordPath, Content: nil}
+	if err := tx.Update(ctx, key, []update.Update{update.ByFieldName("count", 2)}); !record.IsNotFound(err) {
+		t.Fatalf("expected ErrRecordNotFound for deleted buffered record, got %v", err)
+	}
+
+	// 5. SingleRecord buffered with invalid YAML -> parse error.
+	tx.bufferedFiles[recordPath] = TreeChange{Path: recordPath, Content: []byte(":::\n\t:")}
+	if err := tx.Update(ctx, key, []update.Update{update.ByFieldName("count", 2)}); err == nil {
+		t.Fatal("expected parse error for invalid buffered YAML")
+	}
+
+	// 6. SingleRecord encodeRecordContent error (JSON format with unencodable chan value).
+	jsonDef := &ingitdb.Definition{
+		Collections: map[string]*ingitdb.CollectionDef{
+			"tags": {
+				ID:      "tags",
+				DirPath: "data/tags",
+				RecordFile: &ingitdb.RecordFileDef{
+					Name:       "{key}.json",
+					Format:     ingitdb.RecordFormatJSON,
+					RecordType: ingitdb.SingleRecord,
+				},
+			},
+		},
+	}
+	jsonBdb, err := NewBatchingGitHubDB(cfg, jsonDef, "msg")
+	if err != nil {
+		t.Fatalf("NewBatchingGitHubDB(json): %v", err)
+	}
+	jsonTx := newTx(jsonBdb.githubDB)
+	jsonPath := seedFixturePath(jsonDef, "tags", "k")
+	jsonTx.bufferedFiles[jsonPath] = TreeChange{Path: jsonPath, Content: []byte(`{"count": 1}`)}
+	if err := jsonTx.Update(ctx, key, []update.Update{update.ByFieldName("bad", make(chan int))}); err == nil {
+		t.Fatal("expected encodeRecordContent error on JSON channel value")
+	}
+
+	// 7. MapOfRecords ensureMapLoaded error and applyUpdates error.
+	mapDef := mapRecordDef("tags", "data/tags", "tags.json")
+	mapPath := resolveRecordPath(mapDef.Collections["tags"], "")
+	mapSrv := makeBatchServer(t, map[string]string{
+		mapPath: `{"active": {"count": 1}}`,
+	})
+	defer mapSrv.Close()
+	mapCfg := Config{Owner: "ingitdb", Repo: "ingitdb-cli", Ref: "main", APIBaseURL: mapSrv.URL + "/"}
+	mapBdb, err := NewBatchingGitHubDB(mapCfg, mapDef, "msg")
+	if err != nil {
+		t.Fatalf("NewBatchingGitHubDB(map): %v", err)
+	}
+	mapTx := newTx(mapBdb.githubDB)
+	if err := mapTx.Update(ctx, record.NewKeyWithID("tags", "active"), []update.Update{
+		update.ByFieldName("count", stubTransform{name: "bad"}),
+	}); err == nil {
+		t.Fatal("expected applyUpdates error on MapOfRecords")
+	}
+
+	// Closed server triggers ensureMapLoaded / CommitChanges error.
+	closedSrv := makeBatchServer(t, nil)
+	closedSrv.Close()
+	closedCfg := Config{Owner: "ingitdb", Repo: "ingitdb-cli", Ref: "main", APIBaseURL: closedSrv.URL + "/"}
+	closedMapBdb, err := NewBatchingGitHubDB(closedCfg, mapDef, "msg")
+	if err != nil {
+		t.Fatalf("NewBatchingGitHubDB(closed): %v", err)
+	}
+	closedMapTx := newTx(closedMapBdb.githubDB)
+	if err := closedMapTx.Update(ctx, record.NewKeyWithID("tags", "active"), nil); err == nil {
+		t.Fatal("expected ensureMapLoaded error on closed server")
+	}
+
+	// 8. RunReadwriteTransaction CommitChanges error on closed server.
+	closedSingleBdb, err := NewBatchingGitHubDB(closedCfg, def, "msg")
+	if err != nil {
+		t.Fatalf("NewBatchingGitHubDB(closed single): %v", err)
+	}
+	if err := closedSingleBdb.RunReadwriteTransaction(ctx, func(ctx context.Context, tx dal.ReadwriteTransaction) error {
+		return tx.Set(ctx, readyRecord(key, map[string]any{"count": 1}))
+	}); err == nil {
+		t.Fatal("expected CommitChanges error on closed server")
+	}
+}

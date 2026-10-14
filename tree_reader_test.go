@@ -150,4 +150,105 @@ func TestDecodeBlobContent_Encodings(t *testing.T) {
 	if _, err := decodeBlobContent(nil); err == nil {
 		t.Error("expected error for nil blob")
 	}
+
+	invalidB64 := "!!!not-base64!!!"
+	if _, err := decodeBlobContent(&github.Blob{Content: &invalidB64, Encoding: &enc64}); err == nil {
+		t.Error("expected error for invalid base64 content")
+	}
+}
+
+func TestTreeReader_ErrorAndEdgePaths(t *testing.T) {
+	t.Parallel()
+
+	// Invalid config in newTreeReader.
+	if _, err := newTreeReader(Config{}); err == nil {
+		t.Fatal("expected error for invalid Config in newTreeReader")
+	}
+
+	// Server exercising head.set(sha) success & error, GetTree error, non-blob entry, GetBlob error, and decodeBlobContent error.
+	mode := "ok"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		p := r.URL.Path
+		switch {
+		case strings.Contains(p, "/git/commits/bad-commit"):
+			http.Error(w, "commit fail", http.StatusInternalServerError)
+		case strings.Contains(p, "/git/commits/local-commit"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sha":  "local-commit",
+				"tree": map[string]any{"sha": "tree-" + mode},
+			})
+		case strings.Contains(p, "/git/trees/tree-err"):
+			http.Error(w, "tree fail", http.StatusInternalServerError)
+		case strings.Contains(p, "/git/trees/"):
+			blobSHA := "blob-ok"
+			if mode == "blob-err" {
+				blobSHA = "blob-err"
+			} else if mode == "bad-enc" {
+				blobSHA = "blob-bad-enc"
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sha":       "tree-" + mode,
+				"truncated": false,
+				"tree": []map[string]any{
+					{"path": "dir", "type": "tree", "sha": "dir-sha"},
+					{"path": "file.yaml", "type": "blob", "sha": blobSHA},
+				},
+			})
+		case strings.Contains(p, "/git/blobs/blob-err"):
+			http.Error(w, "blob fail", http.StatusInternalServerError)
+		case strings.Contains(p, "/git/blobs/blob-bad-enc"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"content": "x", "encoding": "unknown"})
+		case strings.Contains(p, "/git/blobs/blob-ok"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"content":  base64.StdEncoding.EncodeToString([]byte("v: 1\n")),
+				"encoding": "base64",
+			})
+		default:
+			http.Error(w, "unexpected: "+p, http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := Config{Owner: "o", Repo: "r", Ref: "main", APIBaseURL: srv.URL + "/"}
+	tr, err := newTreeReader(cfg)
+	if err != nil {
+		t.Fatalf("newTreeReader: %v", err)
+	}
+	ctx := context.Background()
+
+	// 1. headTreeSHA via local commit SHA + non-blob entry skipped + valid blob read.
+	tr.head.set("local-commit")
+	if got := tr.head.get(); got != "local-commit" {
+		t.Fatalf("head.get() = %q, want local-commit", got)
+	}
+	content, found, err := tr.readFile(ctx, "file.yaml")
+	if err != nil || !found || string(content) != "v: 1\n" {
+		t.Fatalf("readFile via local head: found=%v err=%v content=%q", found, err, content)
+	}
+
+	// 2. headTreeSHA GetCommit error.
+	tr.head.set("bad-commit")
+	if _, _, err := tr.readFile(ctx, "file.yaml"); err == nil {
+		t.Fatal("expected GetCommit error")
+	}
+
+	// 3. GetTree error.
+	tr.head.set("local-commit")
+	mode = "err"
+	if _, _, err := tr.readFile(ctx, "file.yaml"); err == nil {
+		t.Fatal("expected GetTree error")
+	}
+
+	// 4. GetBlob error.
+	mode = "blob-err"
+	if _, _, err := tr.readFile(ctx, "file.yaml"); err == nil {
+		t.Fatal("expected GetBlob error")
+	}
+
+	// 5. decodeBlobContent error inside readFile.
+	mode = "bad-enc"
+	if _, _, err := tr.readFile(ctx, "file.yaml"); err == nil {
+		t.Fatal("expected decodeBlobContent error")
+	}
 }

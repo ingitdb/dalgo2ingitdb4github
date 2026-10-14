@@ -45,7 +45,7 @@ func applyFieldUpdate(root map[string]any, fieldPath []string, value any) error 
 	}
 	if value == update.ServerTimestamp {
 		value = time.Now().UTC().Format(time.RFC3339Nano)
-	} else if t, ok := dal.IsTransform(value); ok {
+	} else if t, ok := value.(dal.Transform); ok {
 		if t.Name() == "increment" {
 			return applyIncrement(root, fieldPath, t.Value())
 		}

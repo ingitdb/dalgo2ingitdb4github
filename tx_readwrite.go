@@ -233,7 +233,8 @@ func (r readwriteTx) Update(ctx context.Context, key *dalrecord.Key, updates []u
 	if len(preconditions) > 0 {
 		return fmt.Errorf("%w: Update preconditions are not supported by %s", dal.ErrNotSupported, DatabaseID)
 	}
-	rec := dalrecord.NewRecordWithData(key, map[string]any{})
+	data := map[string]any{}
+	rec := dalrecord.NewRecordWithData(key, data)
 	if err := r.Get(ctx, rec); err != nil {
 		return err
 	}
@@ -242,10 +243,6 @@ func (r readwriteTx) Update(ctx context.Context, key *dalrecord.Key, updates []u
 	// Exists() and surface ErrRecordNotFound (Update is not idempotent).
 	if !rec.Exists() {
 		return dalrecord.ErrRecordNotFound
-	}
-	data, ok := rec.Data().(map[string]any)
-	if !ok {
-		return fmt.Errorf("record data is not map[string]any")
 	}
 	if err := applyUpdates(data, updates); err != nil {
 		return err

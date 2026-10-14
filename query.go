@@ -106,9 +106,6 @@ type keyedRow struct {
 // resolution failure (nested subcollection missing, missing record_file) is a
 // hard error.
 func (r readonlyTx) collectionFromQuery(sq dal.StructuredQuery) (*ingitdb.CollectionDef, error) {
-	if r.db.def == nil {
-		return nil, fmt.Errorf("definition is required")
-	}
 	fromSrc := sq.From()
 	if fromSrc == nil {
 		return nil, fmt.Errorf("query has no FROM clause")
@@ -120,14 +117,6 @@ func (r readonlyTx) collectionFromQuery(sq dal.StructuredQuery) (*ingitdb.Collec
 	}
 	collectionID := colRef.Name()
 	parent := colRef.Parent()
-	// A top-level collection absent from the definition means "no such
-	// collection" → empty result. Detect it before resolveScopedCollection so
-	// we can distinguish it from a genuine nested-resolution error.
-	if parent == nil {
-		if _, present := r.db.def.Collections[collectionID]; !present {
-			return nil, nil
-		}
-	}
 	// resolveScopedCollection scopes the DirPath to the parent record chain so a
 	// nested subcollection query reads only that parent's records
 	// (spaces/family/contacts/...), exactly as Get does. Top-level queries
@@ -178,10 +167,7 @@ func (r readonlyTx) scanSingleRecords(ctx context.Context, colDef *ingitdb.Colle
 	if err != nil {
 		return nil, err
 	}
-	keyExtractor, err := buildKeyExtractor(colDef.RecordFile.Name)
-	if err != nil {
-		return nil, err
-	}
+	keyExtractor := buildKeyExtractor(colDef.RecordFile.Name)
 	rows := make([]keyedRow, 0, len(files))
 	prefix := strings.Trim(basePath, "/") + "/"
 	for _, filePath := range files {
@@ -244,29 +230,26 @@ func buildQueryRecord(collection string, row keyedRow) record.Record {
 // buildKeyExtractor returns a function that recovers a record key from a file
 // path relative to the records base directory, expanding the {key} placeholder
 // in the record-file name template. Mirrors the filesystem driver's extractor.
-func buildKeyExtractor(nameTemplate string) (func(relPath string) string, error) {
+func buildKeyExtractor(nameTemplate string) func(relPath string) string {
 	idx := strings.Index(nameTemplate, "{key}")
 	if idx < 0 {
 		return func(relPath string) string {
 			base := path.Base(relPath)
 			return strings.TrimSuffix(base, path.Ext(base))
-		}, nil
+		}
 	}
 	prefix := regexp.QuoteMeta(nameTemplate[:idx])
 	remainder := nameTemplate[idx+len("{key}"):]
 	suffix := regexp.QuoteMeta(strings.ReplaceAll(remainder, "{key}", "\x00"))
 	suffix = strings.ReplaceAll(suffix, "\x00", ".*")
-	re, err := regexp.Compile("^" + prefix + "(.*?)" + suffix + "$")
-	if err != nil {
-		return nil, fmt.Errorf("build key extractor for %q: %w", nameTemplate, err)
-	}
+	re := regexp.MustCompile("^" + prefix + "(.*?)" + suffix + "$")
 	return func(relPath string) string {
 		m := re.FindStringSubmatch(relPath)
 		if m == nil {
 			return ""
 		}
 		return m[1]
-	}, nil
+	}
 }
 
 // applyWhere filters records by the query condition, reading fields from the
