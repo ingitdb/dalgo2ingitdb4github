@@ -37,11 +37,11 @@ func (r readonlyTx) executeQueryToRecordsReader(ctx context.Context, query dal.Q
 	if sq.StartFrom() != "" {
 		return nil, fmt.Errorf("%w: cursor (START FROM) is not supported by %s", dal.ErrNotSupported, DatabaseID)
 	}
-	if len(sq.GroupBy()) > 0 {
-		return nil, fmt.Errorf("%w: GROUP BY is not supported by %s", dal.ErrNotSupported, DatabaseID)
-	}
 	if sq.Having() != nil {
 		return nil, fmt.Errorf("%w: HAVING is not supported by %s", dal.ErrNotSupported, DatabaseID)
+	}
+	if len(sq.GroupBy()) > 0 {
+		return nil, fmt.Errorf("%w: GROUP BY is not supported by %s", dal.ErrNotSupported, DatabaseID)
 	}
 	if len(sq.Columns()) > 0 {
 		return nil, fmt.Errorf("%w: column projection is not supported by %s", dal.ErrNotSupported, DatabaseID)

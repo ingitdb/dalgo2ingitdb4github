@@ -291,11 +291,12 @@ func TestQuery_UnsupportedClausesReturnNotSupported(t *testing.T) {
 	into := func() record.Record {
 		return record.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
 	}
+	// Supply a matching GROUP BY so DALgo accepts HAVING before the adapter rejects it.
 	cases := map[string]dal.Query{
 		"offset":     newBase().Offset(1).SelectIntoRecord(into),
 		"startFrom":  newBase().StartFrom(dal.Cursor("x")).SelectIntoRecord(into),
 		"groupBy":    newBase().GroupBy(dal.Field("name")).SelectIntoRecord(into),
-		"having":     newBase().Having(dal.WhereField("name", dal.Equal, "x")).SelectIntoRecord(into),
+		"having":     newBase().GroupBy(dal.Field("name")).Having(dal.WhereField("name", dal.Equal, "x")).SelectIntoRecord(into),
 		"selectCols": newBase().SelectColumns(dal.Column{Expression: dal.Field("name")}),
 	}
 	for name, q := range cases {
