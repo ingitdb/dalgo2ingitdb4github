@@ -316,6 +316,28 @@ func TestQuery_UnsupportedClausesReturnNotSupported(t *testing.T) {
 	}
 }
 
+func TestQuery_AdapterRejectsAggregations(t *testing.T) {
+	t.Parallel()
+	newBase := func() dal.IQueryBuilder {
+		return dal.From(dal.NewRootCollectionRef("countries", "")).NewQuery()
+	}
+	into := func() record.Record {
+		return record.NewRecordWithIncompleteKey("countries", reflect.String, map[string]any{})
+	}
+	cases := map[string]dal.Query{
+		"groupBy": newBase().GroupBy(dal.Field("name")).SelectIntoRecord(into),
+		"having":  newBase().GroupBy(dal.Field("name")).Having(dal.WhereField("name", dal.Equal, "x")).SelectIntoRecord(into),
+	}
+	for name, q := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := (readonlyTx{}).executeQueryToRecordsReader(context.Background(), q)
+			if !isNotSupported(err) {
+				t.Errorf("%s: adapter error %v is not dal.ErrNotSupported", name, err)
+			}
+		})
+	}
+}
+
 func TestQuery_RecordsetReaderNotSupported(t *testing.T) {
 	t.Parallel()
 	srv := newQueryTestServer(t, countriesBlobs())
