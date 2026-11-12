@@ -5,7 +5,7 @@ go 1.26.0
 toolchain go1.27.3
 
 require (
-	github.com/dal-go/dalgo v0.102.1
+	github.com/dal-go/dalgo v0.102.4
 	github.com/dal-go/record v0.1.5
 	github.com/google/go-github/v88 v88.0.0
 	github.com/ingitdb/ingitdb-go/ingitdb v0.10.6
