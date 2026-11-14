@@ -47,7 +47,7 @@ func (r readonlyTx) executeQueryToRecordsReader(ctx context.Context, query dal.Q
 		return nil, fmt.Errorf("%w: column projection is not supported by %s", dal.ErrNotSupported, DatabaseID)
 	}
 
-	colDef, err := r.collectionFromQuery(sq)
+	colDef, mislaid, err := r.collectionFromQuery(sq)
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +60,11 @@ func (r readonlyTx) executeQueryToRecordsReader(ctx context.Context, query dal.Q
 	rows, err := r.scanCollectionRecords(ctx, colDef)
 	if err != nil {
 		return nil, err
+	}
+	if len(rows) == 0 {
+		if err := r.failIfMislaid(ctx, mislaid); err != nil {
+			return nil, err
+		}
 	}
 
 	// Build data-backed records first so WHERE / ORDER BY can read fields;
@@ -105,15 +110,15 @@ type keyedRow struct {
 // filesystem driver's errCollectionNotInDefinition handling). Any other
 // resolution failure (nested subcollection missing, missing record_file) is a
 // hard error.
-func (r readonlyTx) collectionFromQuery(sq dal.StructuredQuery) (*ingitdb.CollectionDef, error) {
+func (r readonlyTx) collectionFromQuery(sq dal.StructuredQuery) (*ingitdb.CollectionDef, []*mislaidCheck, error) {
 	fromSrc := sq.From()
 	if fromSrc == nil {
-		return nil, fmt.Errorf("query has no FROM clause")
+		return nil, nil, fmt.Errorf("query has no FROM clause")
 	}
 	base := fromSrc.Base()
 	colRef, ok := base.(dal.CollectionRef)
 	if !ok {
-		return nil, fmt.Errorf("FROM source must be a dal.CollectionRef, got %T", base)
+		return nil, nil, fmt.Errorf("FROM source must be a dal.CollectionRef, got %T", base)
 	}
 	collectionID := colRef.Name()
 	parent := colRef.Parent()
@@ -121,19 +126,19 @@ func (r readonlyTx) collectionFromQuery(sq dal.StructuredQuery) (*ingitdb.Collec
 	// nested subcollection query reads only that parent's records
 	// (spaces/family/contacts/...), exactly as Get does. Top-level queries
 	// (parent == nil) are a flat lookup.
-	colDef, err := resolveScopedCollection(r.db.def, collectionID, parent)
+	colDef, mislaid, err := resolveScopedInstance(r.db.def, collectionID, parent)
 	if err != nil {
 		if errors.Is(err, errCollectionNotInDefinition) {
 			// Unknown (sub)collection → no such collection → empty result, matching
 			// the filesystem driver's errCollectionNotInDefinition handling.
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	if colDef.RecordFile == nil {
-		return nil, fmt.Errorf("collection %q has no record file", collectionID)
+		return nil, nil, fmt.Errorf("collection %q has no record file", collectionID)
 	}
-	return colDef, nil
+	return colDef, mislaid, nil
 }
 
 // scanCollectionRecords reads every record of the collection from the GitHub
@@ -486,4 +491,28 @@ func toFloat64(v any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// failIfMislaid fails with ErrMislaidSubCollection when a place earlier
+// versions of this driver put an instance holds a non-hidden entry. It lists
+// each place through the Contents API at the configured Ref (a branch, tag or
+// commit), so it reads the same revision as record reads; a missing directory
+// has no entries. Git has no empty directories, so an entry means files.
+func (r readonlyTx) failIfMislaid(ctx context.Context, checks []*mislaidCheck) error {
+	for _, check := range checks {
+		entries, err := r.db.fileReader.ListDirectory(ctx, check.dir)
+		if err != nil {
+			return err
+		}
+		n := 0
+		for _, name := range entries {
+			if !strings.HasPrefix(name, ".") {
+				n++
+			}
+		}
+		if n > 0 {
+			return check.err(n)
+		}
+	}
+	return nil
 }

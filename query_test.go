@@ -28,6 +28,8 @@ type queryMockServer struct {
 	repo   string
 	branch string
 	blobs  map[string]string
+	// ref, when set, is the ref every Contents API request must carry.
+	ref string
 }
 
 func newQueryTestServer(t *testing.T, blobs map[string]string) *httptest.Server {
@@ -68,8 +70,16 @@ func (m *queryMockServer) serve(w http.ResponseWriter, r *http.Request) {
 		})
 	case r.Method == http.MethodGet && strings.HasPrefix(p, repoPrefix+"/contents/"):
 		requested := strings.TrimPrefix(p, repoPrefix+"/contents/")
+		if m.ref != "" && r.URL.Query().Get("ref") != m.ref {
+			http.Error(w, "wrong ref: "+r.URL.RawQuery, http.StatusBadRequest)
+			return
+		}
 		content, ok := m.blobs[requested]
 		if !ok {
+			if listing := m.directoryListing(requested); len(listing) > 0 {
+				writeJSON(w, listing)
+				return
+			}
 			http.NotFound(w, r)
 			return
 		}
@@ -84,6 +94,30 @@ func (m *queryMockServer) serve(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "unexpected request: "+r.Method+" "+p, http.StatusNotImplemented)
 	}
+}
+
+// directoryListing is the Contents API listing of dir: one entry per distinct
+// name directly below it.
+func (m *queryMockServer) directoryListing(dir string) []map[string]any {
+	seen := map[string]bool{}
+	var out []map[string]any
+	for blobPath := range m.blobs {
+		rest, ok := strings.CutPrefix(blobPath, dir+"/")
+		if !ok {
+			continue
+		}
+		name, _, nested := strings.Cut(rest, "/")
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		kind := "file"
+		if nested {
+			kind = "dir"
+		}
+		out = append(out, map[string]any{"name": name, "path": dir + "/" + name, "type": kind})
+	}
+	return out
 }
 
 func writeJSON(w http.ResponseWriter, body any) {
