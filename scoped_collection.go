@@ -22,13 +22,21 @@ var errCollectionNotInDefinition = errors.New("collection not found in definitio
 // record, returning a copy of that definition whose DirPath is scoped to the
 // concrete parent-record path in the repo.
 //
-// On-disk / in-repo layout (Option A — mirrors Firestore's document/subcollection
-// nesting so a repo stays human-browsable): a subcollection's data lives *under*
-// its parent record's directory, interleaving parent-record ids with
-// subcollection names:
+// In-repo layout: the one the definition defines (ingitdb-go
+// subcollection-record-validation#req:subcollection-storage-convention), which
+// `ingitdb validate` reads. A subcollection's data lives in a directory named
+// by its parent record's key, next to the parent's record files, i.e. below
+// the parent's records directory (record_file.records_dir; "$records" by
+// default for a {key} name, "." for the data directory itself), interleaving
+// parent-record ids with subcollection names:
 //
-//	spaces/family/contacts/c1.yaml   (key: spaces/family/contacts/c1)
-//	spaces/work/contacts/c1.yaml     (key: spaces/work/contacts/c1)
+//	spaces/$records/family/contacts/...   (default records_dir; key spaces/family/contacts/c1)
+//	spaces/family/contacts/...            (records_dir: ".", the Firestore-mirror layout)
+//
+// Data at <parent DirPath>/<key>/<sub>/ while the parent's records_dir is not
+// "." (where this driver wrote before) is mislaid; a query that finds the
+// defined instance empty checks there and fails with ErrMislaidSubCollection
+// (see resolveScopedInstance), instead of returning no rows.
 //
 // This is what keeps records physically scoped by their parent chain: two keys
 // that share a leaf collection + record id but differ in their parent chain no
@@ -45,8 +53,40 @@ var errCollectionNotInDefinition = errors.New("collection not found in definitio
 // subcollection's own schema so encoding/decoding is unaffected. Paths use
 // forward slashes (path.Join) because inGitDB repo paths are always POSIX.
 func resolveScopedCollection(def *ingitdb.Definition, collection string, parent *record.Key) (*ingitdb.CollectionDef, error) {
+	colDef, _, err := resolveScopedInstance(def, collection, parent)
+	return colDef, err
+}
+
+// ErrMislaidSubCollection reports subcollection records found where the
+// definition does not put them.
+var ErrMislaidSubCollection = errors.New("subcollection records outside the location the definition defines")
+
+// mislaidCheck names the place earlier versions of this driver put a
+// subcollection instance, when it differs from the place the definition gives.
+type mislaidCheck struct {
+	dir, expected, parentCol, sub, parentID, base string
+}
+
+func (m *mislaidCheck) err(files int) error {
+	return fmt.Errorf("%w: subcollection %s/%s of parent record %q: %s holds %d file(s), but the definition puts them at %s (%s keeps its records in record_file.records_dir %q). Move them there, or set record_file.records_dir: \".\" on %s and move its own records out of its records directory",
+		ErrMislaidSubCollection, m.parentCol, m.sub, m.parentID, m.dir, files, m.expected, m.parentCol, m.base, m.parentCol)
+}
+
+// recordsBasePath is the directory, below a collection's DirPath, that holds
+// its record files and its records' subcollection directories.
+func recordsBasePath(colDef *ingitdb.CollectionDef) string {
+	if colDef.RecordFile == nil {
+		return ""
+	}
+	return colDef.RecordFile.RecordsBasePath()
+}
+
+// resolveScopedInstance is resolveScopedCollection that also returns, for a
+// nested collection whose old location differs, where to look for mislaid
+// data (nil otherwise).
+func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *record.Key) (*ingitdb.CollectionDef, *mislaidCheck, error) {
 	if def == nil {
-		return nil, fmt.Errorf("definition is required")
+		return nil, nil, fmt.Errorf("definition is required")
 	}
 
 	// Top-level collection: preserve the original flat behaviour verbatim,
@@ -55,9 +95,9 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	if parent == nil {
 		colDef, ok := def.Collections[collection]
 		if !ok {
-			return nil, fmt.Errorf("%w: collection %q not found in definition", errCollectionNotInDefinition, collection)
+			return nil, nil, fmt.Errorf("%w: collection %q not found in definition", errCollectionNotInDefinition, collection)
 		}
-		return colDef, nil
+		return colDef, nil, nil
 	}
 
 	// Build the ancestor record chain from root down to the immediate parent.
@@ -76,18 +116,20 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	rootCol := ancestors[0].col
 	cur, ok := def.Collections[rootCol]
 	if !ok {
-		return nil, fmt.Errorf("%w: collection %q not found in definition", errCollectionNotInDefinition, rootCol)
+		return nil, nil, fmt.Errorf("%w: collection %q not found in definition", errCollectionNotInDefinition, rootCol)
 	}
 	dir := cur.DirPath
+	legacy := dir // where earlier driver versions put the same instance
 	// Walk the intermediate ancestors (root's children, grandchildren, ...).
 	for i := 1; i < len(ancestors); i++ {
 		parentID := ancestors[i-1].id
 		subColID := ancestors[i].col
 		sub, ok := cur.SubCollections[subColID]
 		if !ok {
-			return nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, subColID, cur.ID)
+			return nil, nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, subColID, cur.ID)
 		}
-		dir = path.Join(dir, parentID, subColID)
+		dir = path.Join(dir, recordsBasePath(cur), parentID, subColID)
+		legacy = path.Join(legacy, parentID, subColID)
 		cur = sub
 	}
 
@@ -96,11 +138,17 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 	parentID := ancestors[len(ancestors)-1].id
 	target, ok := cur.SubCollections[collection]
 	if !ok {
-		return nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, collection, cur.ID)
+		return nil, nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, collection, cur.ID)
 	}
-	dir = path.Join(dir, parentID, collection)
+	base := recordsBasePath(cur)
+	dir = path.Join(dir, base, parentID, collection)
+	legacy = path.Join(legacy, parentID, collection)
 
 	scoped := *target
 	scoped.DirPath = dir
-	return &scoped, nil
+	var check *mislaidCheck
+	if legacy != dir {
+		check = &mislaidCheck{dir: legacy, expected: dir, parentCol: cur.ID, sub: collection, parentID: parentID, base: base}
+	}
+	return &scoped, check, nil
 }

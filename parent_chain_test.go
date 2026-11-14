@@ -6,7 +6,7 @@ package dalgo2ghingitdb
 // keys that share a leaf (e.g. contacts/c1) but live under different parents
 // (spaces/family vs spaces/work) collided on the same file and clobbered each
 // other. After the fix each nested record is scoped under its parent record's
-// directory (spaces/<spaceID>/contacts/...), so they no longer collide.
+// directory (spaces/$records/<spaceID>/contacts/..., next to its record file), so they no longer collide.
 
 import (
 	"context"
@@ -136,8 +136,8 @@ func TestResolveScopedCollection_DistinctPathsForSameLeaf(t *testing.T) {
 	familyPath := resolveRecordPath(familyDef, "c1")
 	workPath := resolveRecordPath(workDef, "c1")
 
-	wantFamily := "spaces/family/contacts/$records/c1.yaml"
-	wantWork := "spaces/work/contacts/$records/c1.yaml"
+	wantFamily := "spaces/$records/family/contacts/$records/c1.yaml"
+	wantWork := "spaces/$records/work/contacts/$records/c1.yaml"
 	if familyPath != wantFamily {
 		t.Errorf("family path = %q, want %q", familyPath, wantFamily)
 	}
@@ -186,7 +186,7 @@ func TestResolveScopedCollection_DeepNesting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveScopedCollection: %v", err)
 	}
-	if got, want := resolveRecordPath(colDef, "t1"), "spaces/s1/projects/p1/tasks/$records/t1.yaml"; got != want {
+	if got, want := resolveRecordPath(colDef, "t1"), "spaces/$records/s1/projects/$records/p1/tasks/$records/t1.yaml"; got != want {
 		t.Errorf("deep nested path = %q, want %q", got, want)
 	}
 }
