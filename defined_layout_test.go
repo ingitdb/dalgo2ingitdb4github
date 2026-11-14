@@ -250,3 +250,19 @@ func TestKeyEncodingRefused(t *testing.T) {
 		}
 	}
 }
+
+// A write never commits a record file or parent directory name that no local
+// checkout can hold: over 255 bytes fails with ErrKeyNotStorable, before any
+// request (record-key-encoding#req:over-long-key-fails).
+func TestLengthRuleOnWrite(t *testing.T) {
+	t.Parallel()
+	tx := readonlyTx{db: &githubDB{def: spacesContactsNotesDef()}}
+	ctx := context.Background()
+	if _, _, err := tx.resolveForWrite(ctx, record.NewKeyWithID("spaces", strings.Repeat("k", 251))); !errors.Is(err, ingitdb.ErrKeyNotStorable) || !strings.Contains(err.Error(), "record_file.type") {
+		t.Errorf("record file name: %v", err)
+	}
+	long := record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", strings.Repeat("p", 256)), "contacts", "c")
+	if _, _, err := tx.resolveForWrite(ctx, long); !errors.Is(err, ingitdb.ErrKeyNotStorable) {
+		t.Errorf("parent directory name: %v", err)
+	}
+}

@@ -164,6 +164,9 @@ func (r readonlyTx) resolveForWrite(ctx context.Context, key *dalrecord.Key) (*i
 	if err != nil {
 		return nil, "", err
 	}
+	if err := checkWritePathFits(colDef, recordKey); err != nil {
+		return nil, "", err
+	}
 	if err := r.failIfMislaid(ctx, checks); err != nil {
 		return nil, "", err
 	}
