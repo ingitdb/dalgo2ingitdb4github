@@ -219,3 +219,34 @@ func TestDefinedLayout_NestedRecordsDirAndEscapingKeys(t *testing.T) {
 		t.Error("within misjudges a path")
 	}
 }
+
+// A collection that declares a key encoding is refused, at any level, until
+// this driver encodes keys.
+func TestKeyEncodingRefused(t *testing.T) {
+	t.Parallel()
+	for name, setup := range map[string]func(*ingitdb.Definition){
+		"root": func(d *ingitdb.Definition) {
+			d.Collections["spaces"].RecordFile.KeyEncoding = ingitdb.KeyEncodingTildeV1
+		},
+		"target": func(d *ingitdb.Definition) {
+			d.Collections["spaces"].SubCollections["contacts"].RecordFile.KeyEncoding = ingitdb.KeyEncodingTildeV1
+		},
+	} {
+		def := spacesContactsNotesDef()
+		setup(def)
+		for _, c := range []struct {
+			col    string
+			parent *record.Key
+		}{
+			{"spaces", nil},
+			{"contacts", record.NewKeyWithID("spaces", "s")},
+			{"notes", record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "s"), "contacts", "c")},
+		} {
+			_, _, err := resolveScopedInstance(def, c.col, c.parent)
+			wantRefused := name == "root" || c.col != "spaces"
+			if refused := errors.Is(err, dal.ErrNotSupported); refused != wantRefused {
+				t.Errorf("%s encoded, %s: %v", name, c.col, err)
+			}
+		}
+	}
+}

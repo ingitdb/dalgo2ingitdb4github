@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
@@ -89,6 +90,18 @@ func recordsBasePath(colDef *ingitdb.CollectionDef) string {
 // place a subcollection outside the root collection's directory.
 var ErrParentKeyEscapes = errors.New("parent record ID leads outside the collection directory")
 
+// refuseKeyEncoding fails with dal.ErrNotSupported for a collection that
+// declares record_file.key_encoding: this driver does not encode or decode
+// record keys yet, and reading or writing such a collection with raw keys
+// would show file names as keys and write unsafe names.
+func refuseKeyEncoding(col *ingitdb.CollectionDef) error {
+	if col.RecordFile != nil && col.RecordFile.EncodesKeys() {
+		return fmt.Errorf("%w: collection %q declares record_file.key_encoding %q, which %s does not read or write yet; use the local driver",
+			dal.ErrNotSupported, col.ID, col.RecordFile.KeyEncoding, DatabaseID)
+	}
+	return nil
+}
+
 // recordsDirHead is the first path segment of a records directory.
 func recordsDirHead(base string) string {
 	head, _, _ := strings.Cut(base, "/")
@@ -134,6 +147,9 @@ func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *r
 		if !ok {
 			return nil, nil, fmt.Errorf("%w: collection %q not found in definition", errCollectionNotInDefinition, collection)
 		}
+		if err := refuseKeyEncoding(colDef); err != nil {
+			return nil, nil, err
+		}
 		return colDef, nil, nil
 	}
 
@@ -176,6 +192,9 @@ func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *r
 		if !ok {
 			return nil, nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, subColID, cur.ID)
 		}
+		if err := refuseKeyEncoding(cur); err != nil {
+			return nil, nil, err
+		}
 		if err := addCheck(levelCheck(dir, cur, parentID, subColID)); err != nil {
 			return nil, nil, err
 		}
@@ -189,6 +208,12 @@ func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *r
 	target, ok := cur.SubCollections[collection]
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, collection, cur.ID)
+	}
+	if err := refuseKeyEncoding(cur); err != nil {
+		return nil, nil, err
+	}
+	if err := refuseKeyEncoding(target); err != nil {
+		return nil, nil, err
 	}
 	if err := addCheck(levelCheck(dir, cur, parentID, collection)); err != nil {
 		return nil, nil, err
