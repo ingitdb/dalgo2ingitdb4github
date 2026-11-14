@@ -14,8 +14,8 @@ github.com/google/go-github/v88 v88.0.0 h1:dZA9IKkPK1eXZj4ypngnpRj5FwdpTv4whix2P
 github.com/google/go-github/v88 v88.0.0/go.mod h1:rufTDgn2N45wjhukLTyxmvc9nilSp3mr3Rgtt6b1MPw=
 github.com/google/go-querystring v1.2.0 h1:yhqkPbu2/OH+V9BfpCVPZkNmUXhb2gBxJArfhIxNtP0=
 github.com/google/go-querystring v1.2.0/go.mod h1:8IFJqpSRITyJ8QhQ13bmbeMBDfmeEJZD5A0egEOmkqU=
-github.com/ingitdb/ingitdb-go/ingitdb v0.10.7-0.20261114104449-15aca5dce95a h1:8onj4luIgDD7clxejzV4NSkxK/fW0EpL0jwdtEdDmV4=
-github.com/ingitdb/ingitdb-go/ingitdb v0.10.7-0.20261114104449-15aca5dce95a/go.mod h1:0Jm9fWk+6g/g1Xf8C9TbFs7X9z6Pal9rfgaSMFP16e4=
+github.com/ingitdb/ingitdb-go/ingitdb v0.11.0 h1:kDHiOABHo1R2MosM851fvwHPBkvSqLgj92P8MgsxJv4=
+github.com/ingitdb/ingitdb-go/ingitdb v0.11.0/go.mod h1:0Jm9fWk+6g/g1Xf8C9TbFs7X9z6Pal9rfgaSMFP16e4=
 github.com/ingr-io/ingr-go v0.0.2 h1:2AfFllqzCe2dCNtxIUo306oYzaZr//YzrVOHd0C73nI=
 github.com/ingr-io/ingr-go v0.0.2/go.mod h1:gb/dGW0qXziCq9iAIgk0yITyWY013w2bhdYiXO0RLuY=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
