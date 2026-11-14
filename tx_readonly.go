@@ -26,7 +26,7 @@ func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 	if r.db.def == nil {
 		return fmt.Errorf("definition is required")
 	}
-	colDef, recordKey, err := r.resolveCollection(record.Key())
+	colDef, recordKey, mislaid, err := r.resolveKey(record.Key())
 	if err != nil {
 		if errors.Is(err, errCollectionNotInDefinition) {
 			// A record in an unknown collection cannot exist: report not-found via
@@ -38,34 +38,31 @@ func (r readonlyTx) Get(ctx context.Context, record dalrecord.Record) error {
 		return err
 	}
 	recordPath := resolveRecordPath(colDef, recordKey)
+	var data map[string]any
+	var found bool
 	switch colDef.RecordFile.RecordType {
 	case ingitdb.SingleRecord:
-		data, found, err := r.readSingleRecord(ctx, recordPath, colDef)
-		if err != nil {
-			return err
-		}
-		if !found {
-			record.SetError(dalrecord.ErrRecordNotFound)
-			return nil
-		}
-		record.SetError(nil)
-		target := record.Data().(map[string]any)
-		maps.Copy(target, data)
+		data, found, err = r.readSingleRecord(ctx, recordPath, colDef)
 	case ingitdb.MapOfRecords:
-		data, found, err := r.readRecordFromMap(ctx, recordPath, recordKey, colDef)
-		if err != nil {
-			return err
-		}
-		if !found {
-			record.SetError(dalrecord.ErrRecordNotFound)
-			return nil
-		}
-		record.SetError(nil)
-		target := record.Data().(map[string]any)
-		maps.Copy(target, data)
+		data, found, err = r.readRecordFromMap(ctx, recordPath, recordKey, colDef)
 	default:
 		return fmt.Errorf("record type %q is not supported", colDef.RecordFile.RecordType)
 	}
+	if err != nil {
+		return err
+	}
+	if !found {
+		// Nothing at the defined place: data where earlier driver versions
+		// put the instance is an error, not a missing record.
+		if err := r.failIfMislaid(ctx, mislaid); err != nil {
+			return err
+		}
+		record.SetError(dalrecord.ErrRecordNotFound)
+		return nil
+	}
+	record.SetError(nil)
+	target := record.Data().(map[string]any)
+	maps.Copy(target, data)
 	return nil
 }
 
@@ -135,23 +132,40 @@ func (r readonlyTx) readRecordFromMap(ctx context.Context, recordPath, recordKey
 	return localizedData, true, nil
 }
 
-func (r readonlyTx) resolveCollection(key *dalrecord.Key) (*ingitdb.CollectionDef, string, error) {
+// resolveKey resolves the (possibly nested) collection of key and the record
+// key, with the mislaid-data checks of the key's parent chain (see
+// resolveScopedInstance).
+func (r readonlyTx) resolveKey(key *dalrecord.Key) (*ingitdb.CollectionDef, string, []*mislaidCheck, error) {
 	if r.db.def == nil {
-		return nil, "", fmt.Errorf("definition is required")
+		return nil, "", nil, fmt.Errorf("definition is required")
 	}
 	if key == nil {
-		return nil, "", fmt.Errorf("key is nil")
+		return nil, "", nil, fmt.Errorf("key is nil")
 	}
-	// resolveScopedCollection walks the key's parent chain so nested records are
-	// physically scoped under their parent record (spaces/family/contacts/...).
+	// resolveScopedInstance walks the key's parent chain so nested records are
+	// physically scoped under their parent record (spaces/$records/family/contacts/...).
 	// For a top-level key (no parent) it is a plain flat lookup, unchanged.
-	colDef, err := resolveScopedCollection(r.db.def, key.Collection(), key.Parent())
+	colDef, checks, err := resolveScopedInstance(r.db.def, key.Collection(), key.Parent())
+	if err != nil {
+		return nil, "", nil, err
+	}
+	if colDef.RecordFile == nil {
+		return nil, "", nil, fmt.Errorf("collection %q has no record file", key.Collection())
+	}
+	recordKey := fmt.Sprintf("%v", key.ID)
+	return colDef, recordKey, checks, nil
+}
+
+// resolveForWrite is resolveCollection for a write: it fails with
+// ErrMislaidSubCollection when data of the instance sits where earlier driver
+// versions put it, so a write never adds a second copy next to it.
+func (r readonlyTx) resolveForWrite(ctx context.Context, key *dalrecord.Key) (*ingitdb.CollectionDef, string, error) {
+	colDef, recordKey, checks, err := r.resolveKey(key)
 	if err != nil {
 		return nil, "", err
 	}
-	if colDef.RecordFile == nil {
-		return nil, "", fmt.Errorf("collection %q has no record file", key.Collection())
+	if err := r.failIfMislaid(ctx, checks); err != nil {
+		return nil, "", err
 	}
-	recordKey := fmt.Sprintf("%v", key.ID)
 	return colDef, recordKey, nil
 }

@@ -3,12 +3,15 @@ package dalgo2ghingitdb
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/record"
+	"github.com/ingitdb/ingitdb-go/ingitdb"
 )
 
 // The definition puts the contacts of space "family" in spaces' records
@@ -82,7 +85,7 @@ func TestDefinedLayout_MislaidInstanceFailsQuery(t *testing.T) {
 	if !errors.Is(err, ErrMislaidSubCollection) {
 		t.Fatalf("expected ErrMislaidSubCollection, got %v", err)
 	}
-	for _, want := range []string{`subcollection spaces/contacts of parent record "family"`, "spaces/family/contacts holds 1 file(s)",
+	for _, want := range []string{`subcollection spaces/contacts of parent record "family"`, "spaces/family/contacts holds 1 entr(ies)",
 		"but the definition puts them at spaces/$records/family/contacts", `records_dir "$records"`, `records_dir: "."`} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q lacks %q", err, want)
@@ -96,17 +99,123 @@ func TestDefinedLayout_MislaidInstanceFailsQuery(t *testing.T) {
 	}
 }
 
-// failIfMislaid passes on a configuration or listing error.
+// failIfMislaid passes a listing error through.
 func TestFailIfMislaid_Errors(t *testing.T) {
 	t.Parallel()
-	check := &mislaidCheck{dir: "spaces/family/contacts"}
-	if err := (readonlyTx{db: &githubDB{cfg: Config{}}}).failIfMislaid(context.Background(), check); err == nil {
-		t.Error("invalid config: expected an error")
-	}
 	srv := newAPIErrorServer(t)
 	defer srv.Close()
-	tx := readonlyTx{db: &githubDB{cfg: Config{Owner: "ingitdb", Repo: "ingitdb-cli", Ref: "main", APIBaseURL: srv.URL + "/"}}}
-	if err := tx.failIfMislaid(context.Background(), check); err == nil || errors.Is(err, ErrMislaidSubCollection) {
+	reader, err := NewGitHubFileReader(Config{Owner: "ingitdb", Repo: "ingitdb-cli", Ref: "main", APIBaseURL: srv.URL + "/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx := readonlyTx{db: &githubDB{fileReader: reader.(*githubFileReader)}}
+	if err := tx.failIfMislaid(context.Background(), []*mislaidCheck{{dir: "spaces/family/contacts"}}); err == nil || errors.Is(err, ErrMislaidSubCollection) {
 		t.Errorf("listing error: expected it to pass through, got %v", err)
+	}
+}
+
+// spacesContactsNotesDef is spaces > contacts > notes, every level keeping
+// its records in $records.
+func spacesContactsNotesDef() *ingitdb.Definition {
+	def := spacesWithContactsSubDef()
+	contacts := def.Collections["spaces"].SubCollections["contacts"]
+	notes := *contacts
+	notes.ID, notes.SubCollections = "notes", nil
+	contacts.SubCollections = map[string]*ingitdb.CollectionDef{"notes": &notes}
+	return def
+}
+
+func mockDB(t *testing.T, ref string, def *ingitdb.Definition, blobs map[string]string) dal.DB {
+	t.Helper()
+	m := &queryMockServer{owner: "ingitdb", repo: "ingitdb-cli", branch: "main", blobs: blobs, ref: ref}
+	srv := httptest.NewServer(http.HandlerFunc(m.serve))
+	t.Cleanup(srv.Close)
+	db, err := NewGitHubDBWithDef(Config{Owner: "ingitdb", Repo: "ingitdb-cli", Ref: ref, APIBaseURL: srv.URL + "/"}, def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+// A Get of a record missing where the definition puts it, while the instance
+// has data where earlier versions wrote it, fails with the details; writes
+// fail before writing. The listing reads the configured Ref through the
+// Contents API, so a tag works (the mock serves no branch named v1.0.0).
+func TestDefinedLayout_MislaidInstanceFailsGetAndWrites(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db := mockDB(t, "v1.0.0", spacesWithContactsSubDef(), map[string]string{
+		"spaces/family/contacts/$records/c1.yaml": "name: Alice\n", // mislaid
+	})
+	key := record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "family"), "contacts", "c1")
+	err := db.Get(ctx, record.NewRecordWithData(key, map[string]any{}))
+	if !errors.Is(err, ErrMislaidSubCollection) || !strings.Contains(err.Error(), "spaces/family/contacts holds 1 entr(ies)") {
+		t.Fatalf("Get: expected ErrMislaidSubCollection, got %v", err)
+	}
+	for name, write := range map[string]func(context.Context, dal.ReadwriteTransaction) error{
+		"Set": func(_ context.Context, tx dal.ReadwriteTransaction) error {
+			return tx.Set(ctx, record.NewRecordWithData(key, map[string]any{"name": "B"}))
+		},
+		"Insert": func(_ context.Context, tx dal.ReadwriteTransaction) error {
+			return tx.Insert(ctx, record.NewRecordWithData(key, map[string]any{"name": "B"}))
+		},
+		"Delete": func(_ context.Context, tx dal.ReadwriteTransaction) error { return tx.Delete(ctx, key) },
+	} {
+		if err := db.RunReadwriteTransaction(ctx, write); !errors.Is(err, ErrMislaidSubCollection) {
+			t.Errorf("%s: expected ErrMislaidSubCollection, got %v", name, err)
+		}
+	}
+	// A record at the defined place is read without a listing.
+	ok := mockDB(t, "v1.0.0", spacesWithContactsSubDef(), map[string]string{
+		"spaces/$records/work/contacts/$records/c2.yaml": "name: Bob\n",
+	})
+	rec := record.NewRecordWithData(record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "work"), "contacts", "c2"), map[string]any{})
+	if err := ok.Get(ctx, rec); err != nil || !rec.Exists() {
+		t.Fatalf("Get work/c2: exists=%v, %v", rec.Exists(), err)
+	}
+}
+
+// Mislaid data below a correctly placed ancestor is found, and so is the
+// layout earlier versions wrote at every level.
+func TestDefinedLayout_MislaidAtEveryLevel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	key := record.NewKeyWithParentAndID(
+		record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", "family"), "contacts", "c1"), "notes", "n1")
+	for name, tc := range map[string]struct{ blob, want string }{
+		"depth two":  {"spaces/$records/family/contacts/c1/notes/$records/n1.yaml", "subcollection contacts/notes of parent record \"c1\""},
+		"old layout": {"spaces/family/contacts/c1/notes/n1.yaml", "subcollection spaces/contacts of parent record \"family\""},
+	} {
+		db := mockDB(t, "main", spacesContactsNotesDef(), map[string]string{tc.blob: "name: N\n"})
+		err := db.Get(ctx, record.NewRecordWithData(key, map[string]any{}))
+		if !errors.Is(err, ErrMislaidSubCollection) || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: expected %q, got %v", name, tc.want, err)
+		}
+	}
+}
+
+// A nested records_dir is not mistaken for mislaid data, and a parent ID that
+// climbs out of the collection directory is refused.
+func TestDefinedLayout_NestedRecordsDirAndEscapingKeys(t *testing.T) {
+	t.Parallel()
+	def := spacesWithContactsSubDef()
+	nested := "data/items"
+	def.Collections["spaces"].RecordFile.RecordsDir = &nested
+	col, checks, err := resolveScopedInstance(def, "contacts", record.NewKeyWithID("spaces", "data"))
+	if err != nil || len(checks) != 0 || col.DirPath != "spaces/data/items/data/contacts" {
+		t.Fatalf("records_dir data/items, parent data: %v, %d checks, %v", col, len(checks), err)
+	}
+	for _, dir := range []*string{nil, func() *string { s := "."; return &s }()} {
+		def.Collections["spaces"].RecordFile.RecordsDir = dir
+		if _, _, err := resolveScopedInstance(def, "contacts", record.NewKeyWithID("spaces", "..")); !errors.Is(err, ErrParentKeyEscapes) {
+			t.Errorf("records_dir %v: expected ErrParentKeyEscapes, got %v", dir, err)
+		}
+	}
+	deep := record.NewKeyWithParentAndID(record.NewKeyWithID("spaces", ".."), "contacts", "c1")
+	if _, _, err := resolveScopedInstance(spacesContactsNotesDef(), "notes", deep); !errors.Is(err, ErrParentKeyEscapes) {
+		t.Errorf("escaping ancestor: expected ErrParentKeyEscapes, got %v", err)
+	}
+	if !within("", "a") || within("", "..") || within(".", "../a") || !within("a", "a/b") || within("a", "ab") {
+		t.Error("within misjudges a path")
 	}
 }

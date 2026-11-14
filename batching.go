@@ -152,7 +152,7 @@ var _ dal.ReadwriteTransaction = (*batchingTx)(nil)
 func (t *batchingTx) Options() dal.TransactionOptions { return t.opts }
 
 func (t *batchingTx) Set(ctx context.Context, record dalrecord.Record) error {
-	colDef, recordKey, err := t.resolveCollection(record.Key())
+	colDef, recordKey, err := t.resolveForWrite(ctx, record.Key())
 	if err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func (t *batchingTx) Set(ctx context.Context, record dalrecord.Record) error {
 
 func (t *batchingTx) Insert(ctx context.Context, record dalrecord.Record, opts ...dal.InsertOption) error {
 	_ = opts
-	colDef, recordKey, err := t.resolveCollection(record.Key())
+	colDef, recordKey, err := t.resolveForWrite(ctx, record.Key())
 	if err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func (t *batchingTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 }
 
 func (t *batchingTx) Delete(ctx context.Context, key *dalrecord.Key) error {
-	colDef, recordKey, err := t.resolveCollection(key)
+	colDef, recordKey, err := t.resolveForWrite(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -349,7 +349,7 @@ func (t *batchingTx) Update(ctx context.Context, key *dalrecord.Key, updates []u
 	if len(preconditions) > 0 {
 		return fmt.Errorf("%w: Update preconditions are not supported by %s (batching)", dal.ErrNotSupported, DatabaseID)
 	}
-	colDef, recordKey, err := t.resolveCollection(key)
+	colDef, recordKey, err := t.resolveForWrite(ctx, key)
 	if err != nil {
 		if errors.Is(err, errCollectionNotInDefinition) {
 			// An unknown collection cannot hold the record → not-found (Update is

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"strings"
 
 	"github.com/dal-go/record"
 	"github.com/ingitdb/ingitdb-go/ingitdb"
@@ -34,9 +35,11 @@ var errCollectionNotInDefinition = errors.New("collection not found in definitio
 //	spaces/family/contacts/...            (records_dir: ".", the Firestore-mirror layout)
 //
 // Data at <parent DirPath>/<key>/<sub>/ while the parent's records_dir is not
-// "." (where this driver wrote before) is mislaid; a query that finds the
-// defined instance empty checks there and fails with ErrMislaidSubCollection
-// (see resolveScopedInstance), instead of returning no rows.
+// "." (where this driver wrote before) is mislaid, at any level of the parent
+// chain. Every write, and a read that finds nothing at the defined place (a Get
+// of a missing record, a query with no rows), checks there and fails with
+// ErrMislaidSubCollection (see resolveScopedInstance and failIfMislaid),
+// instead of returning nothing or writing a second copy.
 //
 // This is what keeps records physically scoped by their parent chain: two keys
 // that share a leaf collection + record id but differ in their parent chain no
@@ -61,15 +64,16 @@ func resolveScopedCollection(def *ingitdb.Definition, collection string, parent 
 // definition does not put them.
 var ErrMislaidSubCollection = errors.New("subcollection records outside the location the definition defines")
 
-// mislaidCheck names the place earlier versions of this driver put a
-// subcollection instance, when it differs from the place the definition gives.
+// mislaidCheck names a place earlier versions of this driver put a
+// subcollection instance (dir), at one level of the parent chain, and the
+// place the definition gives it (expected).
 type mislaidCheck struct {
 	dir, expected, parentCol, sub, parentID, base string
 }
 
-func (m *mislaidCheck) err(files int) error {
-	return fmt.Errorf("%w: subcollection %s/%s of parent record %q: %s holds %d file(s), but the definition puts them at %s (%s keeps its records in record_file.records_dir %q). Move them there, or set record_file.records_dir: \".\" on %s and move its own records out of its records directory",
-		ErrMislaidSubCollection, m.parentCol, m.sub, m.parentID, m.dir, files, m.expected, m.parentCol, m.base, m.parentCol)
+func (m *mislaidCheck) err(entries int) error {
+	return fmt.Errorf("%w: subcollection %s/%s of parent record %q: %s holds %d entr(ies), but the definition puts them at %s (%s keeps its records in record_file.records_dir %q). Move them there, or set record_file.records_dir: \".\" on %s and move its own records out of its records directory",
+		ErrMislaidSubCollection, m.parentCol, m.sub, m.parentID, m.dir, entries, m.expected, m.parentCol, m.base, m.parentCol)
 }
 
 // recordsBasePath is the directory, below a collection's DirPath, that holds
@@ -81,10 +85,43 @@ func recordsBasePath(colDef *ingitdb.CollectionDef) string {
 	return colDef.RecordFile.RecordsBasePath()
 }
 
-// resolveScopedInstance is resolveScopedCollection that also returns, for a
-// nested collection whose old location differs, where to look for mislaid
-// data (nil otherwise).
-func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *record.Key) (*ingitdb.CollectionDef, *mislaidCheck, error) {
+// ErrParentKeyEscapes reports a parent record ID (such as "..") that would
+// place a subcollection outside the root collection's directory.
+var ErrParentKeyEscapes = errors.New("parent record ID leads outside the collection directory")
+
+// recordsDirHead is the first path segment of a records directory.
+func recordsDirHead(base string) string {
+	head, _, _ := strings.Cut(base, "/")
+	return head
+}
+
+// within reports whether the repository path p is root or below it; an empty
+// root is the repository root.
+func within(root, p string) bool {
+	if root == "" || root == "." {
+		return p != ".." && !strings.HasPrefix(p, "../")
+	}
+	return p == root || strings.HasPrefix(p, root+"/")
+}
+
+// levelCheck is the mislaid-data check for the instance of sub under parent
+// record parentID of collection cur, whose defined directory is parentDir; nil
+// when cur keeps its records in its own directory (no other layout) or when
+// parentID is the first segment of cur's records directory (the path is
+// inside that directory).
+func levelCheck(parentDir string, cur *ingitdb.CollectionDef, parentID, sub string) *mislaidCheck {
+	base := recordsBasePath(cur)
+	if base == "" || parentID == recordsDirHead(base) {
+		return nil
+	}
+	return &mislaidCheck{dir: path.Join(parentDir, parentID, sub), expected: path.Join(parentDir, base, parentID, sub),
+		parentCol: cur.ID, sub: sub, parentID: parentID, base: base}
+}
+
+// resolveScopedInstance is resolveScopedCollection that also returns, for each
+// level of a nested collection's parent chain where an earlier location
+// differs, where to look for mislaid data.
+func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *record.Key) (*ingitdb.CollectionDef, []*mislaidCheck, error) {
 	if def == nil {
 		return nil, nil, fmt.Errorf("definition is required")
 	}
@@ -118,8 +155,19 @@ func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *r
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: collection %q not found in definition", errCollectionNotInDefinition, rootCol)
 	}
-	dir := cur.DirPath
-	legacy := dir // where earlier driver versions put the same instance
+	rootDir := cur.DirPath
+	dir := rootDir
+	var checks []*mislaidCheck
+	addCheck := func(c *mislaidCheck) error {
+		if c == nil {
+			return nil
+		}
+		if !within(rootDir, c.dir) {
+			return fmt.Errorf("%w: %s", ErrParentKeyEscapes, c.dir)
+		}
+		checks = append(checks, c)
+		return nil
+	}
 	// Walk the intermediate ancestors (root's children, grandchildren, ...).
 	for i := 1; i < len(ancestors); i++ {
 		parentID := ancestors[i-1].id
@@ -128,8 +176,10 @@ func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *r
 		if !ok {
 			return nil, nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, subColID, cur.ID)
 		}
+		if err := addCheck(levelCheck(dir, cur, parentID, subColID)); err != nil {
+			return nil, nil, err
+		}
 		dir = path.Join(dir, recordsBasePath(cur), parentID, subColID)
-		legacy = path.Join(legacy, parentID, subColID)
 		cur = sub
 	}
 
@@ -140,15 +190,15 @@ func resolveScopedInstance(def *ingitdb.Definition, collection string, parent *r
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: subcollection %q under %q not found in definition", errCollectionNotInDefinition, collection, cur.ID)
 	}
-	base := recordsBasePath(cur)
-	dir = path.Join(dir, base, parentID, collection)
-	legacy = path.Join(legacy, parentID, collection)
+	if err := addCheck(levelCheck(dir, cur, parentID, collection)); err != nil {
+		return nil, nil, err
+	}
+	dir = path.Join(dir, recordsBasePath(cur), parentID, collection)
+	if !within(rootDir, dir) {
+		return nil, nil, fmt.Errorf("%w: %s", ErrParentKeyEscapes, dir)
+	}
 
 	scoped := *target
 	scoped.DirPath = dir
-	var check *mislaidCheck
-	if legacy != dir {
-		check = &mislaidCheck{dir: legacy, expected: dir, parentCol: cur.ID, sub: collection, parentID: parentID, base: base}
-	}
-	return &scoped, check, nil
+	return &scoped, checks, nil
 }

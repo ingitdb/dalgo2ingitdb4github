@@ -61,7 +61,7 @@ func (r readonlyTx) executeQueryToRecordsReader(ctx context.Context, query dal.Q
 	if err != nil {
 		return nil, err
 	}
-	if len(rows) == 0 && mislaid != nil {
+	if len(rows) == 0 {
 		if err := r.failIfMislaid(ctx, mislaid); err != nil {
 			return nil, err
 		}
@@ -110,7 +110,7 @@ type keyedRow struct {
 // filesystem driver's errCollectionNotInDefinition handling). Any other
 // resolution failure (nested subcollection missing, missing record_file) is a
 // hard error.
-func (r readonlyTx) collectionFromQuery(sq dal.StructuredQuery) (*ingitdb.CollectionDef, *mislaidCheck, error) {
+func (r readonlyTx) collectionFromQuery(sq dal.StructuredQuery) (*ingitdb.CollectionDef, []*mislaidCheck, error) {
 	fromSrc := sq.From()
 	if fromSrc == nil {
 		return nil, nil, fmt.Errorf("query has no FROM clause")
@@ -493,25 +493,26 @@ func toFloat64(v any) (float64, bool) {
 	}
 }
 
-// failIfMislaid fails with ErrMislaidSubCollection when the place earlier
-// versions of this driver put an instance holds files.
-func (r readonlyTx) failIfMislaid(ctx context.Context, check *mislaidCheck) error {
-	treeWriter, err := NewTreeWriter(r.db.cfg)
-	if err != nil {
-		return err
-	}
-	files, err := treeWriter.ListFilesUnder(ctx, check.dir)
-	if err != nil {
-		return err
-	}
-	n := 0
-	for _, f := range files {
-		if !strings.HasPrefix(path.Base(f), ".") {
-			n++
+// failIfMislaid fails with ErrMislaidSubCollection when a place earlier
+// versions of this driver put an instance holds a non-hidden entry. It lists
+// each place through the Contents API at the configured Ref (a branch, tag or
+// commit), so it reads the same revision as record reads; a missing directory
+// has no entries. Git has no empty directories, so an entry means files.
+func (r readonlyTx) failIfMislaid(ctx context.Context, checks []*mislaidCheck) error {
+	for _, check := range checks {
+		entries, err := r.db.fileReader.ListDirectory(ctx, check.dir)
+		if err != nil {
+			return err
 		}
-	}
-	if n > 0 {
-		return check.err(n)
+		n := 0
+		for _, name := range entries {
+			if !strings.HasPrefix(name, ".") {
+				n++
+			}
+		}
+		if n > 0 {
+			return check.err(n)
+		}
 	}
 	return nil
 }
