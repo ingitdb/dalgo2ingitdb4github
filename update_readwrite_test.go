@@ -141,10 +141,10 @@ func TestReadwriteTx_Update_And_ReadonlyTx_Errors(t *testing.T) {
 		t.Fatal("expected error for Update with invalid increment target")
 	}
 
-	// readonlyTx.resolveCollection(nil), Exists, and GetMulti error paths.
+	// readonlyTx.resolveKey(nil), Exists, and GetMulti error paths.
 	rtx := readonlyTx{db: &githubDB{def: noRecFileDef}}
-	if _, _, err := rtx.resolveCollection(nil); err == nil {
-		t.Fatal("expected resolveCollection(nil) error")
+	if _, _, _, err := rtx.resolveKey(nil); err == nil {
+		t.Fatal("expected resolveKey(nil) error")
 	}
 	if _, err := rtx.Exists(ctx, key); err == nil {
 		t.Fatal("expected Exists error when collection has nil RecordFile")

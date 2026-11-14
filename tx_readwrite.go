@@ -25,7 +25,7 @@ type readwriteTx struct {
 }
 
 func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
-	colDef, recordKey, err := r.resolveCollection(record.Key())
+	colDef, recordKey, err := r.resolveForWrite(ctx, record.Key())
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (r readwriteTx) Set(ctx context.Context, record dalrecord.Record) error {
 
 func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts ...dal.InsertOption) error {
 	_ = opts
-	colDef, recordKey, err := r.resolveCollection(record.Key())
+	colDef, recordKey, err := r.resolveForWrite(ctx, record.Key())
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (r readwriteTx) Insert(ctx context.Context, record dalrecord.Record, opts .
 }
 
 func (r readwriteTx) Delete(ctx context.Context, key *dalrecord.Key) error {
-	colDef, recordKey, err := r.resolveCollection(key)
+	colDef, recordKey, err := r.resolveForWrite(ctx, key)
 	if err != nil {
 		return err
 	}
